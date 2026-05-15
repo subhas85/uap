@@ -2,31 +2,15 @@
 
 External resources the UAP setup wizard or operator may want during or after a deployment. Linked, not bundled — these stay current at their origin.
 
-## Methodology
+## Optional methodology — folder-as-workflow patterns
 
-### Interpretable Context Methodology (ICM)
+UAP doesn't prescribe any methodology for what goes inside your subworkspaces. Every operator works differently. If you want a folder-as-workflow pattern (numbered stage folders, small `CLAUDE.md` / `CONTEXT.md` files at each level, one agent walking the tree), one approach is **ICM (Interpretable Context Methodology)**:
 
-The folder-structure-as-agent-architecture pattern that UAP's `~/workspace/` hub and `~/ops/` pipelines are built on.
-
-- Paper: [arXiv 2603.16021 — Interpretable Context Methodology: Folder Structure as Agentic Architecture](https://arxiv.org/abs/2603.16021)
+- Paper: [arXiv 2603.16021](https://arxiv.org/abs/2603.16021)
 - Reference implementation: [github.com/RinDig/Interpretable-Context-Methodology-ICM](https://github.com/RinDig/Interpretable-Context-Methodology-ICM)
 - Background: [Anthropic — Effective context engineering for AI agents](https://www.anthropic.com/engineering/effective-context-engineering-for-ai-agents)
 
-**Plain-English summary (read this if you've never encountered ICM):**
-
-ICM is a pattern for organizing work so a single AI coding agent (like Claude Code) can run multi-step pipelines without an orchestration framework. The trick is that **the filesystem itself is the workflow**:
-
-- Numbered stage folders (`01_intake/`, `02_clean/`, `03_handoff/`, …) define the sequence the work moves through.
-- Each level has a small markdown file telling the agent its current job:
-  - `CLAUDE.md` — *where am I?* (project/workspace identity, always loaded ~800 tokens)
-  - `CONTEXT.md` — *where do I go next?* (read on entry to a folder, ~300 tokens)
-  - Stage-level `CONTEXT.md` — *what do I do here?* (read per task, ~200–500 tokens, specifies Inputs / Process / Outputs)
-  - Reference files — *what rules apply?* (loaded on demand)
-- Humans review the handoff file between stages — that's the design, not a bug.
-
-The benefit: instead of writing a CrewAI/LangChain orchestration with N specialized agents talking to each other, you write zero orchestration code and let one agent walk the folder structure. The structure *is* the orchestration.
-
-UAP applies ICM at two scopes: the home-directory **hub** (`~/workspace/CLAUDE.md` routes the agent to the right subworkspace) and **inside each workspace** (`~/ops/pipelines/<name>/01_intake/`, etc.).
+Adopt it post-deploy if it fits how you work. The UAP wizard won't push it on you.
 
 ---
 

@@ -147,22 +147,16 @@ Customizes: Claude command-line flag.
 Default: **yes** — every Claude session is reachable from the mobile app immediately. Set via `~/.claude/settings.json: { "remoteControlAtStartup": true }`.
 Customizes: Claude settings.
 
-### Q7.5 Workspace methodology — use ICM (Interpretable Context Methodology)?
-Default: **yes** — `~/workspace/` is the hub with `CLAUDE.md` as router, numbered stage folders inside subworkspaces. Reference: arXiv 2603.16021.
-Alternative: no — free-form folder structure.
-Customizes: `~/workspace/CLAUDE.md` content, expected subworkspace conventions.
-
-### Q7.6 Workspace hub folder name
+### Q7.5 Workspace hub folder name
 Default: **`workspace`** (UAP convention).
 Alternatives: `hub`, `work`, custom.
 Customizes: directory name, i3 autostart `--working-directory`, all references.
 
-### Q7.7 Subworkspaces inside the hub
-Default: **create fresh subdirectories under `~/workspace/`** — name the project areas you want (e.g., `dev`, `ops`, `notes`). The wizard creates each directory and seeds it with a starter `CLAUDE.md` router. The `~/uap` framework repo is always symlinked in as `~/workspace/uap` since that's the only top-level folder UAP owns.
-Alternative: **symlink existing top-level folders** (`~/ops/`, `~/dev/`, etc.) into `~/workspace/` — for operators migrating an existing layout where those folders already live at `~/`. New deployments should prefer the default.
-Customizes: directory creation or symlinks in the hub, layout table in `CLAUDE.md` router.
+### Q7.6 Subworkspaces inside the hub
+Default: **create fresh subdirectories under `~/workspace/`** — name the project areas you want (e.g., `dev`, `ops`, `notes`, `clients`, whatever fits). The wizard creates the directories empty; the operator decides what goes in each. The `~/uap` framework repo is always symlinked in as `~/workspace/uap` since that's the only top-level folder UAP owns.
+Alternative: **symlink existing top-level folders** (`~/ops/`, `~/dev/`, etc.) into `~/workspace/` — for operators migrating an existing layout where those folders already live at `~/`.
 
-> **Open design question:** the role of `ops/` (team operations, runbooks, project memory) vs `workspace/` (the AI hub) needs clearer boundaries. See `setup/DESIGN-FOLLOWUPS.md` for what's still being decided.
+UAP is intentionally unopinionated about what *goes inside* each subworkspace — every operator works differently. If you want a folder-as-workflow pattern, see `references.md` for a link to one approach (ICM), but it's optional.
 
 ---
 
@@ -196,55 +190,27 @@ The wizard should remind the operator: if RDP clients are Microsoft Remote Deskt
 
 ---
 
-## Section 10 — Operator profile & use cases
+## Section 10 — Operator profile
 
-The answers in this section change the *experience* of UAP for this operator — handholding level, learning aids, what gets seeded in `ops/`, and how aggressively defaults are accepted.
+The answers here shape *how* the wizard facilitates the rest of the conversation — handholding level, whether to install learning aids, whether to warn about keyboard-driven defaults. They don't seed any folders or pipelines — UAP is intentionally unopinionated about what work the operator brings to the box.
 
-### Q10.1 VM / hypervisor experience
-Options:
-- (a) New — never created a VM before.
-- (b) Some — created a VM or two; basic knowledge.
-- (c) Comfortable — runs VMs regularly.
-- (d) Expert — manages hypervisors professionally.
-
-Used by the wizard to decide whether to over-explain Phase 1 (VM creation), whether to offer the autoinstall ISO option, and whether to suggest defensive defaults.
-
-### Q10.2 Linux terminal comfort
+### Q10.1 Linux terminal comfort
 Options:
 - (a) New — mostly used GUI Linux; the terminal is intimidating.
 - (b) Some — knows `cd`, `ls`, edits config files with vim/nano occasionally.
 - (c) Comfortable — daily terminal user, can troubleshoot.
 - (d) Expert — sysadmin or dev professional.
 
-If (a) or (b), the wizard installs **learning aids**: `tldr` (short manpages), a curated `~/workspace/CHEATSHEET.md` covering UAP keybindings + common terminal commands, and a slightly noisier i3bar that shows hints. Skipped for (c)/(d) — they don't need the noise.
+If (a) or (b), the wizard installs **learning aids**: `tldr` (short manpages) and a curated `~/workspace/CHEATSHEET.md` covering UAP keybindings + common terminal commands. Skipped for (c)/(d) — they don't need the noise.
 
-### Q10.3 Keyboard-driven workflow comfort
+### Q10.2 Keyboard-driven workflow comfort
 Options:
 - (a) Prefer mouse / GUI — tiling WMs feel hostile.
 - (b) Mixed — keyboard for code, mouse for navigation.
 - (c) Comfortable — vim-style keybindings, curious about tiling WMs.
 - (d) Power user — already using i3/sway/tmux.
 
-If (a), the wizard should flag a warning: UAP is keyboard-first; an operator who hates that may prefer GNOME/KDE atop the same Ubuntu base. The wizard can offer to install GNOME alongside i3 (or instead of it) and skip Phases 7–9 if so.
-
-### Q10.4 Primary project types (multi-select)
-Pick all that apply. Each selected option seeds an ICM-shaped `ops/pipelines/<type>/` folder structure with starter `CLAUDE.md` and `CONTEXT.md` files.
-
-- (a) **AI agent orchestration** — the canonical UAP use case. Seeds `ops/pipelines/agent-workflows/` with stage folders for brief → plan → execute → review.
-- (b) **Web / app development** — adds `~/dev/` placeholders; doesn't add to `ops/` (dev work lives there, not in ops).
-- (c) **DevOps / SRE / infrastructure** — seeds `ops/pipelines/incidents/` and `ops/runbooks/` with ICM-style intake → triage → postmortem stages.
-- (d) **Customer support / ticketing** (Zendesk, Jira Service Management, your in-house ticketing system, etc.) — seeds `ops/pipelines/desktop-support/` with the reference template (intake → triage → resolve → KB handoff).
-- (e) **Requirements / meetings → spec** — seeds `ops/pipelines/requirements/` matching the reference template (meetings + email → spec → handoff to dev).
-- (f) **UX research** — seeds `ops/pipelines/ux-research/` with stages for interviews → synthesis → recommendations.
-- (g) **Content writing / documentation** — seeds `ops/pipelines/content/` with draft → review → publish.
-- (h) **Data / analytics** — seeds `ops/pipelines/analyses/` with data → notebook → report.
-- (i) **Research / academic** — seeds `ops/pipelines/research/` with lit review → experiment → writeup.
-- (j) **IT helpdesk / sysadmin** (the original UAP use case) — seeds `ops/pipelines/desktop-support/` AND `ops/runbooks/`.
-- (k) **Other** — operator describes their workflow; the wizard helps design an ICM-shaped pipeline for it.
-
-### Q10.5 Add a starter top-level `ops/CONTEXT.md` and `_config/` skeleton?
-Default: **yes** if any project type in Q10.4 maps to `ops/`. The skeleton is the reference template — top-level `CONTEXT.md` (routes to pipelines), `TEAM.md` (who does what), `_config/` (shared voice, glossary, redaction rules), `shared/` (runbooks + ADRs).
-Skip if Q10.4 only has option (b) (web/app dev only — nothing flows through `ops/`).
+If (a), the wizard flags a warning: UAP is keyboard-first; an operator who hates that may prefer GNOME/KDE atop the same Ubuntu base. The wizard can offer to install GNOME alongside i3 (or instead of it) and skip the keyboard-heavy parts of the desktop config if so.
 
 ---
 

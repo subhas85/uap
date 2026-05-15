@@ -56,15 +56,15 @@ Each option has implications for `setup/CLAUDE.md` Section 10 seeding (which pat
 
 Concrete items captured from the first real wizard run, already merged into `QUESTIONNAIRE.md`:
 
-- [x] Q2.1 default → "this machine" (Section 2 collapsed; provisioning is operator's job)
-- [x] Q2.3 (ballooning) removed (Proxmox-VM-creation-specific, no longer relevant)
-- [x] Q6 simplified from five atomic questions to one preset chooser (Standard / macOS-flavor / Minimalist)
-- [x] Q7.7 default flipped to "create fresh subdirs" (symlink mode is now the alternative for migrating operators)
-- [ ] Plymouth `os/plymouth/logo.png` should be the UAP logo, not the Claude logo (asset pending)
-- [ ] README needs a hero image at the top showcasing the UAP terminal design (asset pending)
+- [x] Section 2 collapsed; provisioning is operator's job (no more hypervisor questions in the wizard)
+- [x] Section 6 collapsed to one i3-preset chooser (Standard / macOS-flavor / Minimalist)
+- [x] Q7.7 default flipped to "create fresh subdirs" (symlink mode is the alternative for migrating operators)
+- [x] **ICM removed from the wizard.** Q7.5 (use-ICM question) deleted. Section 10 trimmed from five questions to two (terminal comfort + keyboard workflow comfort); the ICM-shaped pipeline seeding (old Q10.4, Q10.5) is gone. `setup/CLAUDE.md` facilitator instructions no longer auto-seed `ops/pipelines/<type>/`. `setup/references.md` keeps ICM as one optional methodology among potentially many, not a default. **Rationale (user, 2026-05-14):** "everyone is different — let's leave folder contents alone."
+- [x] Plymouth `os/plymouth/logo.png` replaced with the UAP logo (UFO + UAP text on transparent background, 800x600).
+- [x] README hero image added at top (`branding/uap-hero.png`).
 
 Items not yet acted on:
-- ops/ vs workspace/ confusion — see top section above.
+- ops/ vs workspace/ confusion — see top section above. Worth noting: with ICM removed and Section 10 simplified, the wizard no longer creates a separate `~/ops/` — everything lives under `~/workspace/`. So the "two locations" problem largely dissolves on a fresh install; the only place it persists is on operator machines (like this author's adminbox) that pre-dated UAP. Reconsider whether this design followup is still active.
 - bootstrap.sh installs `build-essential` (228 MB) — nothing in UAP currently needs it. Candidate for removal from the apt prereqs list.
 - bootstrap.sh doesn't append `~/.local/bin` to the operator's `~/.bashrc`, so post-bootstrap shells can't find `claude` until the operator does so manually. Should auto-append (with idempotence).
-- qemu-guest-agent isn't enabled in fresh installs — graceful `qm reboot` from a Proxmox host fails. Worth a `apt install qemu-guest-agent && systemctl enable --now qemu-guest-agent` in the cloud-init flow (only when the wizard detects it's running on a hypervisor VM).
+- qemu-guest-agent isn't enabled in fresh installs — graceful `qm reboot` from a Proxmox host fails. Worth a `apt install qemu-guest-agent && systemctl enable --now qemu-guest-agent` somewhere if the wizard ever detects it's running on a hypervisor VM (today the wizard doesn't try to detect that anymore — operators handle hypervisor concerns themselves).

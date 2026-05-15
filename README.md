@@ -2,6 +2,8 @@
 
 > *out of this world*
 
+![UAP — terminal of the future](branding/uap-hero.png)
+
 UAP turns a fresh Ubuntu Server install into a quiet, dark, keyboard-driven workstation you log into remotely — and that has an AI agent in the session with you from the first keystroke. Open source, MIT-licensed, parameterized so any operator can fork it and stand up an identical machine in minutes.
 
 **What you actually get:**
@@ -14,8 +16,8 @@ UAP turns a fresh Ubuntu Server install into a quiet, dark, keyboard-driven work
 **What's different about it:**
 
 - **AI-collaborator first.** Terminal autostart, workspace hub, permission-tier `~/.claude/settings.json`s are designed around having a Claude session in the room with you — not bolted on after the fact.
-- **ICM workflows.** Projects use a folder-as-workflow convention: numbered stages (`01_intake/`, `02_clean/`, …) with `CLAUDE.md` at each level telling the agent its current role. One agent walks the tree; no orchestration framework juggling specialists.
 - **Identity-driven & reproducible.** Everything that makes a machine *yours* (hostname, theme, `components_enabled`, operator email) lives in `~/uap.local/identity.yaml`, not in this repo. Fork → set identity → `apply.sh`. Same identity on another machine = the same workstation.
+- **Unopinionated about what work you bring.** UAP wires the box for AI-collaborator use; what you put in `~/workspace/` is up to you. If you want a folder-as-workflow methodology, [`setup/references.md`](setup/references.md) links to one approach (ICM), but it's optional.
 
 Working today. PRs and issues welcome. See [`setup/DESIGN.md`](setup/DESIGN.md) for architecture, [`CONTRIBUTING.md`](CONTRIBUTING.md) to contribute.
 

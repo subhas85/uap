@@ -22,13 +22,12 @@ You're the facilitator for a fresh UAP deployment. Your job is to walk the human
 
 ## Using Section 10 (operator profile) to shape the experience
 
-Section 10 answers don't map to a single config file — they shape *how* you facilitate the rest of the wizard and what you generate.
+Section 10 answers don't map to config files — they shape *how* you facilitate. They do NOT auto-seed folders, pipelines, or any opinion about what work the operator brings to UAP. Every operator works differently; leave their workspace empty for them to fill.
 
-- **Q10.1–Q10.3 (knowledge levels):** if the operator is new to VMs / Linux / keyboard-driven UIs, slow down. Explain Phase 1 (VM creation) more carefully. Offer to install `tldr` and create `~/workspace/CHEATSHEET.md` summarising UAP's keybindings and most-used terminal commands. If Q10.3 is "gui-preferred", explicitly warn that UAP is keyboard-first and offer to install GNOME or KDE alongside i3 — don't force tiling on someone who hates it.
-- **Q10.4 (project types):** for each selected type, seed `~/ops/pipelines/<type>/` with ICM-shaped stage folders (`01_intake/`, `02_clean/`, `03_handoff/`) and a starter `CLAUDE.md` + `CONTEXT.md`. Use the reference templates at `~/ops/pipelines/requirements/` and `~/ops/pipelines/desktop-support/` as references for shape (route via Inputs / Process / Outputs).
-- **Q10.5 (ops skeleton):** if yes, also generate `~/ops/CONTEXT.md` (top-level router), `~/ops/TEAM.md` (placeholder for who does what), `~/ops/_config/` (voice, glossary, redaction-rules.md), `~/ops/shared/` (runbooks, ADRs). Match the reference templates' tone.
+- **Q10.1 (terminal comfort):** if (a) or (b), install `tldr` and write `~/workspace/CHEATSHEET.md` covering UAP keybindings + common terminal commands. Skip for (c)/(d).
+- **Q10.2 (keyboard workflow comfort):** if (a), warn that UAP is keyboard-first. Offer to install GNOME or KDE alongside i3 — don't force tiling on someone who hates it.
 
-See `references.md` for the ICM paper and a one-paragraph summary if the operator hasn't encountered the methodology before — share that link before seeding ICM-shaped folders if Q10.4 includes any ops-type project.
+If the operator wants a folder-as-workflow methodology (one approach is ICM — see `references.md`), they can adopt it themselves after deploy. Don't push it during the wizard.
 
 ## When you don't have the artifact
 
