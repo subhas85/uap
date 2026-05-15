@@ -69,6 +69,23 @@ else
   log "apt prereqs already present."
 fi
 
+# --- yq (Mike Farah's Go yq, required by apply.sh) ------------------------
+# apt's "yq" is the Python version with different syntax. apply.sh needs Go yq.
+# Install via direct download to ~/.local/bin/ to avoid the apt confusion.
+
+YQ_VERSION="v4.45.4"
+if ! command -v yq >/dev/null 2>&1 || ! yq --version 2>&1 | grep -q "mikefarah"; then
+  log "Installing yq (Mike Farah's Go yq, ${YQ_VERSION}) to ~/.local/bin/"
+  mkdir -p "$HOME/.local/bin"
+  curl -fsSL "https://github.com/mikefarah/yq/releases/download/${YQ_VERSION}/yq_linux_amd64" \
+    -o "$HOME/.local/bin/yq"
+  chmod +x "$HOME/.local/bin/yq"
+  export PATH="$HOME/.local/bin:$PATH"
+  yq --version
+else
+  log "yq already installed: $(yq --version)"
+fi
+
 # --- Claude Code CLI ------------------------------------------------------
 
 if command -v claude >/dev/null 2>&1; then
