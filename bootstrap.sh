@@ -58,7 +58,7 @@ fi
 # --- Minimal apt prereqs --------------------------------------------------
 
 NEED_APT=()
-for pkg in git curl ca-certificates build-essential; do
+for pkg in git curl ca-certificates; do
   dpkg -s "$pkg" >/dev/null 2>&1 || NEED_APT+=("$pkg")
 done
 if [ "${#NEED_APT[@]}" -gt 0 ]; then
@@ -79,9 +79,26 @@ else
   export PATH="$HOME/.local/bin:$PATH"
   if ! command -v claude >/dev/null 2>&1; then
     err "Claude Code install completed but 'claude' is not on PATH."
-    err "Ensure ~/.local/bin is in your PATH (add to ~/.bashrc), then re-run."
+    err "Check ~/.local/bin/claude; ensure ~/.local/bin is on PATH and re-run."
     exit 1
   fi
+fi
+
+# --- Persist ~/.local/bin on PATH for future shells (idempotent) ----------
+# Claude Code installs to ~/.local/bin/claude. The export above covers this
+# script's process; this block makes the path stick for fresh SSH/tty shells.
+# Marker-based idempotence — re-running bootstrap.sh won't duplicate the block.
+
+BASHRC="$HOME/.bashrc"
+UAP_MARKER='# UAP bootstrap: ensure ~/.local/bin is on PATH (for claude, etc.)'
+if [ -d "$HOME/.local/bin" ] && [ -f "$BASHRC" ] && ! grep -qsF "$UAP_MARKER" "$BASHRC"; then
+  {
+    printf '\n%s\n' "$UAP_MARKER"
+    printf 'case ":$PATH:" in *":$HOME/.local/bin:"*) ;; *) export PATH="$HOME/.local/bin:$PATH" ;; esac\n'
+  } >> "$BASHRC"
+  log "appended ~/.local/bin PATH guard to $BASHRC"
+elif [ -f "$BASHRC" ] && grep -qsF "$UAP_MARKER" "$BASHRC"; then
+  log "~/.bashrc already has the UAP PATH guard — leaving alone."
 fi
 
 # --- Get the UAP repo ----------------------------------------------------

@@ -65,6 +65,6 @@ Concrete items captured from the first real wizard run, already merged into `QUE
 
 Items not yet acted on:
 - ops/ vs workspace/ confusion — see top section above. Worth noting: with ICM removed and Section 10 simplified, the wizard no longer creates a separate `~/ops/` — everything lives under `~/workspace/`. So the "two locations" problem largely dissolves on a fresh install; the only place it persists is on operator machines (like this author's adminbox) that pre-dated UAP. Reconsider whether this design followup is still active.
-- bootstrap.sh installs `build-essential` (228 MB) — nothing in UAP currently needs it. Candidate for removal from the apt prereqs list.
-- bootstrap.sh doesn't append `~/.local/bin` to the operator's `~/.bashrc`, so post-bootstrap shells can't find `claude` until the operator does so manually. Should auto-append (with idempotence).
+- [x] bootstrap.sh installed `build-essential` (228 MB) — nothing in UAP currently needs it. **Done:** dropped from the apt prereqs list. Prereqs are now just `git curl ca-certificates`.
+- [x] bootstrap.sh didn't append `~/.local/bin` to the operator's `~/.bashrc`. **Done:** marker-idempotent block appended after Claude Code install. Uses a case-statement PATH guard so the export only fires when needed.
 - qemu-guest-agent isn't enabled in fresh installs — graceful `qm reboot` from a Proxmox host fails. Worth a `apt install qemu-guest-agent && systemctl enable --now qemu-guest-agent` somewhere if the wizard ever detects it's running on a hypervisor VM (today the wizard doesn't try to detect that anymore — operators handle hypervisor concerns themselves).
