@@ -69,3 +69,18 @@ Items not yet acted on:
 - [x] bootstrap.sh installed `build-essential` (228 MB) — nothing in UAP currently needs it. **Done:** dropped from the apt prereqs list. Prereqs are now just `git curl ca-certificates`.
 - [x] bootstrap.sh didn't append `~/.local/bin` to the operator's `~/.bashrc`. **Done:** marker-idempotent block appended after Claude Code install. Uses a case-statement PATH guard so the export only fires when needed.
 - qemu-guest-agent isn't enabled in fresh installs — graceful `qm reboot` from a Proxmox host fails. Worth a `apt install qemu-guest-agent && systemctl enable --now qemu-guest-agent` somewhere if the wizard ever detects it's running on a hypervisor VM (today the wizard doesn't try to detect that anymore — operators handle hypervisor concerns themselves).
+
+---
+
+## Wizard test feedback log (2026-05-15, second run)
+
+Second wizard test against a freshly-rebuilt VM (107) running Ubuntu Server 24.04. Run-time gaps in `apply.sh` that the first test (2026-05-14) couldn't catch because that run only got as far as the facilitator wizard:
+
+- [x] **`apply.sh` didn't apt-install the underlying packages** for any of the rendered components (i3, xrdp, alacritty, rofi, gtk-theme, plymouth). Operators were ending up with config files written into `~/.config/` for packages that didn't exist. **Done (commit e83a778):** added an idempotent `apt_install` helper with a once-per-run `apt-get update`, and every `install_*` hook now apt-installs its own dependency list before laying down configs.
+- [x] **JetBrainsMono Nerd Font missing.** apt's `fonts-jetbrains-mono` is the non-patched variant; i3bar / rofi / alacritty all want the patched glyphs and silently degraded. **Done:** new `install_jetbrains_nerd_font` helper that pulls the patched font from `ryanoasis/nerd-fonts` GitHub releases into `~/.local/share/fonts/` and refreshes `fc-cache`. Called from `install_i3`.
+- [x] **xrdp Phase 6 missing.** `install_xrdp` rendered `sesman.ini` + `reconnectwm.sh` but never did the actual apt install, systemctl enable, ufw rule, or keymap mirror. RDP from an iPad couldn't connect. **Done:** `install_xrdp` now does apt (xrdp + xorgxrdp), sesman.ini patch, reconnectwm.sh install, km-`<LCID>`.ini keymap mirror, `systemctl enable --now xrdp`, `systemctl restart xrdp-sesman`, `ufw allow 3389/tcp`, and `chmod 644 /etc/xrdp/key.pem`.
+- [x] **`remoteControlAtStartup` missing from rendered `~/.claude/settings.json`.** Q7.4 of the wizard recorded a yes/no answer in identity.yaml but the value never made it into the JSON. **Done (commit 2da0087):** added the key directly to each `ai/claude-settings/*.settings.json.tmpl` template, hardcoded per tier — personal-lab + engineer = true, staff + production-admin = false. Personal-lab also gets `skipDangerousModePermissionPrompt: true`.
+- [x] **`yq` not installed by bootstrap.** `apply.sh` requires Mike Farah's Go yq (the apt `yq` is a different Python tool with different syntax) and was failing immediately on a fresh box. **Done (commit 4d8f3c8):** bootstrap.sh now downloads yq v4.45.4 to `~/.local/bin/` before launching Claude.
+- [x] **Operator apps (Edge, Chrome, Typora, btop, bat, glow, thunar, flameshot) not installed.** `apply.sh` had no hook for the contents of `identity.apps.*`. **Done (commit e83a778):** new `apps` component + `install_apps()` hook that reads `identity.apps.{browsers,markdown_editor,terminal_tools,file_manager,screenshot}` and installs via apt or third-party repos (Microsoft Edge, Google Chrome, Typora) as appropriate. All four profile yamls now list `apps` in `components_enabled`.
+
+Next: third wizard test on a freshly-rebuilt VM to confirm a green-field box reaches a usable state from `bootstrap.sh` alone.
