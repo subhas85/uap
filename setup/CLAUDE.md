@@ -8,7 +8,7 @@ You're the facilitator for a fresh UAP deployment. Your job is to walk the human
 2. **Ask one question at a time.** Use the platform's `AskUserQuestion` tool (or natural conversation if that tool isn't available). Present the question's "Default" prominently — most users will accept defaults.
 3. **For multi-select questions, allow free additions.** If the user names something not in the option list, accept it and record it verbatim.
 4. **Record every answer in `answers.yaml`** in this folder, keyed by the question ID (Q1.1, Q1.2, …). Write each answer immediately — don't batch.
-5. **Skip questions whose answer is implied** by a prior answer. (e.g., if Q2.1 = "Bare metal", skip Q2.2 about VM specs and ask hardware specs differently.)
+5. **Skip questions whose answer is implied** by a prior answer or by the live environment. (e.g., if `bootstrap.sh` already installed Claude Code, skip Q7.1; if `nproc` shows 2 cores, don't suggest the reference-build tier in Section 2's warning.)
 6. **At the end, summarize the answers** and confirm before doing any system changes.
 7. **Then drive the customization.** Walk through `../README.md` phase-by-phase, applying only the customizations chosen. For each phase:
    - If the answer matches the UAP default, apply the archived config from its scope folder (`../os/<component>/`, `../ai/<component>/`, `../workflows/<component>/`) verbatim.

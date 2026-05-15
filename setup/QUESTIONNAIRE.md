@@ -37,26 +37,14 @@ Customizes: alacritty, i3bar, rofi, Typora.
 
 ---
 
-## Section 2 — Hardware
+## Section 2 — Target machine
 
-### Q2.1 Where will UAP run?
-Options:
-- (a) **VM on a hypervisor** (Proxmox / ESXi / libvirt / Hyper-V) — default.
-- (b) Bare metal (consumer or server hardware).
-- (c) Cloud VM (AWS/GCP/Azure/Hetzner/etc.).
-Customizes: Phase 1A vs 1B in runbook, autoinstall ISO behavior.
+UAP installs in-place on whatever Linux box you're running the wizard on. Provisioning (creating a VM, running the Ubuntu installer, configuring the hypervisor) is the operator's job — by the time the wizard is asking these questions, the box already exists and `bootstrap.sh` has just run on it.
 
-### Q2.2 Resource tier (skip if Q2.1 = bare metal)
-Options (see Minimum specs table in `../README.md`):
-- (a) Absolute min — 2 vCPU / 2 GB / 25 GB.
-- (b) Comfortable — 2 vCPU / 4 GB / 30 GB.
-- (c) **Recommended** — 4 vCPU / 8 GB / 40 GB. Default.
-- (d) Reference build — 4–8 vCPU / 16 GB / 60 GB+.
-Customizes: VM creation API call.
-
-### Q2.3 Proxmox-specific: disable memory ballooning?
-Default: **yes** if Q2.1 = Proxmox VM.
-Customizes: VM creation flag.
+### Q2.1 Confirm: install UAP on this machine?
+Default: **yes** — `bootstrap.sh` is running here, so this is the target.
+Alternative: no — pause the wizard; UAP doesn't provision remote machines yet (see `setup/DESIGN-FOLLOWUPS.md`).
+At wizard-start, detect this machine's specs (`nproc`, `free -h`, `df -h /`) and warn if below the recommended tier (4 vCPU / 8 GB / 40 GB — see `../README.md` Minimum specs). Don't ask for resource tier — observe.
 
 ---
 
@@ -124,31 +112,18 @@ Customizes: i3 keybindings.
 
 ---
 
-## Section 6 — Window manager & shortcuts
+## Section 6 — Window manager preset
 
-### Q6.1 Window manager
-Default: **i3** (only WM the runbook is built around).
-Alternatives: sway (Wayland equivalent), bspwm, awesome — would require significant rework; flag as future work.
-Customizes: everything in Phase 7.
+UAP is built around i3. Rather than five atomic config questions, pick one opinionated preset and tweak post-install if needed.
 
-### Q6.2 Modifier key
-Default: **Mod1 (Alt)**.
-Alternative: Mod4 (Super / Windows / Command) — common for users coming from macOS or wanting Alt free for in-app shortcuts.
-Customizes: `set $mod` line in i3 config; all keybindings shift accordingly.
+### Q6.1 i3 preset
+Options:
+- (a) **Standard UAP** (recommended). Mod1 (Alt), 10 workspaces, active-window title in the top bar, borderless windows (2px pixel border only). Default.
+- (b) **macOS-flavor**. Mod4 (Super / Cmd) instead of Mod1 — leaves Alt free for in-app shortcuts. Otherwise identical to Standard.
+- (c) **Minimalist**. Mod1, 4 workspaces, plain workspace numbers (no active-title daemon), borderless. Lower clutter and lower resource usage; good for older hardware or operators who want fewer moving parts.
+Customizes: every variable in `os/i3/i3-config.tmpl` plus `wm.workspace_title_daemon` and `wm.workspace_count` in identity.yaml.
 
-### Q6.3 Workspace count
-Default: **10** (workspaces 1–9 plus 0).
-Customizes: i3 workspace bindings.
-
-### Q6.4 Active-window title in top bar?
-Default: **yes** — the `i3-workspace-title` daemon renames the focused workspace to `N: <window title>` so the title is always visible next to the workspace number.
-Alternative: no — workspaces remain plain numbers.
-Customizes: i3 `exec_always` line, daemon install.
-
-### Q6.5 Per-window title bars?
-Default: **no** (clean borderless, 2px pixel border only).
-Alternative: yes (`default_border normal` — title bar above each window).
-Customizes: i3 `default_border` line.
+Post-install, individual settings (modifier key, workspace count, borders, daemon) can be changed by editing `~/uap.local/identity.yaml` and rerunning `apply.sh i3 workspace-title-daemon`. Operators who want a different window manager (sway, bspwm, awesome) should fork — the rest of UAP assumes i3.
 
 ---
 
@@ -182,9 +157,12 @@ Default: **`workspace`** (UAP convention).
 Alternatives: `hub`, `work`, custom.
 Customizes: directory name, i3 autostart `--working-directory`, all references.
 
-### Q7.7 Which subworkspaces to symlink into the hub?
-Default: the subset the user has — typically `ops/`, `dev/`, `uap/`. Add custom names.
-Customizes: symlinks in the hub, layout table in `CLAUDE.md` router.
+### Q7.7 Subworkspaces inside the hub
+Default: **create fresh subdirectories under `~/workspace/`** — name the project areas you want (e.g., `dev`, `ops`, `notes`). The wizard creates each directory and seeds it with a starter `CLAUDE.md` router. The `~/uap` framework repo is always symlinked in as `~/workspace/uap` since that's the only top-level folder UAP owns.
+Alternative: **symlink existing top-level folders** (`~/ops/`, `~/dev/`, etc.) into `~/workspace/` — for operators migrating an existing layout where those folders already live at `~/`. New deployments should prefer the default.
+Customizes: directory creation or symlinks in the hub, layout table in `CLAUDE.md` router.
+
+> **Open design question:** the role of `ops/` (team operations, runbooks, project memory) vs `workspace/` (the AI hub) needs clearer boundaries. See `setup/DESIGN-FOLLOWUPS.md` for what's still being decided.
 
 ---
 
