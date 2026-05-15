@@ -100,4 +100,5 @@ components_enabled:
   - typora-themes
   - i3
   - workspace-hub
+  - apps
   - claude-settings
