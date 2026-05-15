@@ -62,6 +62,7 @@ Concrete items captured from the first real wizard run, already merged into `QUE
 - [x] **ICM removed from the wizard.** Q7.5 (use-ICM question) deleted. Section 10 trimmed from five questions to two (terminal comfort + keyboard workflow comfort); the ICM-shaped pipeline seeding (old Q10.4, Q10.5) is gone. `setup/CLAUDE.md` facilitator instructions no longer auto-seed `ops/pipelines/<type>/`. `setup/references.md` keeps ICM as one optional methodology among potentially many, not a default. **Rationale (user, 2026-05-14):** "everyone is different — let's leave folder contents alone."
 - [x] Plymouth `os/plymouth/logo.png` replaced with the UAP logo (UFO + UAP text on transparent background, 800x600).
 - [x] README hero image added at top (`branding/uap-hero.png`).
+- [x] **Wizard split into Simple + Advanced modes.** Step 0 in `setup/CLAUDE.md` now asks which path. Simple = pick one of the four profiles, auto-detect username/hostname, ask email, apply. ~30 sec. Advanced = walk full `QUESTIONNAIRE.md`. Rationale: most users want defaults, not a 20-question survey.
 
 Items not yet acted on:
 - ops/ vs workspace/ confusion — see top section above. Worth noting: with ICM removed and Section 10 simplified, the wizard no longer creates a separate `~/ops/` — everything lives under `~/workspace/`. So the "two locations" problem largely dissolves on a fresh install; the only place it persists is on operator machines (like this author's adminbox) that pre-dated UAP. Reconsider whether this design followup is still active.

@@ -1,3 +1,9 @@
+# UAP Deployment Questionnaire (Advanced mode only)
+
+> **Read this only if the operator picked Advanced** in Step 0 of `CLAUDE.md`. Simple mode skips this file entirely — it just asks which of the four profiles (`personal-lab`, `engineer`, `staff`, `production-admin`) to install, auto-detects username/hostname, prompts for email, and runs `apply.sh`.
+
+---
+
 # UAP Deployment Questionnaire
 
 This is the source-of-truth list of questions to walk a new user/operator through when deploying UAP on a new VM or machine. The facilitator agent (see `CLAUDE.md` in this folder) asks each question conversationally and records answers in `answers.yaml`.

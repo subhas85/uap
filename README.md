@@ -43,14 +43,15 @@ bash ~/uap/bootstrap.sh
 What `bootstrap.sh` does:
 
 1. Sanity-checks the OS, refuses root.
-2. Installs minimal apt prereqs (`git`, `curl`, `ca-certificates`, `build-essential`).
-3. Installs the Claude Code CLI (`curl https://claude.ai/install.sh | bash`).
+2. Installs minimal apt prereqs (`git`, `curl`, `ca-certificates`).
+3. Installs the Claude Code CLI (`curl https://claude.ai/install.sh | bash`) and persists `~/.local/bin` on `PATH` for future shells.
 4. Ensures the UAP repo is at `~/uap/` (clones from `REPO_URL` if not).
 5. Launches `claude` in `~/uap/setup/` — at which point the **deployment wizard** takes over.
 
-The wizard reads `setup/CLAUDE.md` (facilitator instructions) and walks you through `setup/QUESTIONNAIRE.md` conversationally. Every answer goes into `setup/answers.yaml`. When it's done, the wizard drives the rest of this runbook phase-by-phase, applying your customizations.
+The wizard offers two paths:
 
-> **First-time deployers** — see `setup/references.md` for a plain-English intro to ICM (the folder-as-workflow methodology UAP uses) before answering Section 10 of the questionnaire.
+- **Simple** (recommended for first-timers) — one question: which of four built-in profiles to install (`personal-lab`, `engineer`, `staff`, `production-admin`). The wizard auto-detects your username and hostname, asks for your email, copies the chosen profile to `~/uap.local/identity.yaml`, and runs `apply.sh`. ~30 seconds. To customize anything after install, edit `~/uap.local/identity.yaml` and rerun `apply.sh`.
+- **Advanced** — walks the full `setup/QUESTIONNAIRE.md` so you can pick each piece (browsers, modifier key, workspace count, theme, etc.). Use this when you want to deviate from defaults during install rather than after.
 
 Once the wizard finishes, RDP to the box from your laptop or phone over your tailnet and you should be on the UAP desktop.
 
