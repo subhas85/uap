@@ -1,0 +1,29 @@
+local wezterm = require 'wezterm'
+
+return {
+  font = wezterm.font('${FONT_NAME}'),
+  font_size = ${FONT_SIZE},
+  color_scheme = 'Tokyo Night',
+
+  hide_tab_bar_if_only_one_tab = true,
+  use_fancy_tab_bar = false,
+  window_padding = {
+    left = 8,
+    right = 8,
+    top = 6,
+    bottom = 6,
+  },
+
+  colors = {
+    foreground = '${FG_HEX}',
+    background = '${BG_HEX}',
+    cursor_bg = '${ACCENT_HEX}',
+    cursor_border = '${ACCENT_HEX}',
+    cursor_fg = '${BG_HEX}',
+    selection_bg = '${BG_ALT_HEX}',
+    selection_fg = '${FG_HEX}',
+  },
+
+  default_cursor_style = 'SteadyBar',
+  check_for_updates = false,
+}

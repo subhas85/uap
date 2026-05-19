@@ -9,8 +9,9 @@ UAP turns a fresh Ubuntu Server install into a quiet, dark, keyboard-driven work
 **What you actually get:**
 
 - Ubuntu Server 24.04 LTS + i3 + xrdp (you RDP in from your laptop or phone, you don't sit at the box)
-- Tokyo Night theme across the whole stack (i3 bar, alacritty, rofi, Typora, GTK apps, the boot splash)
+- Tokyo Night theme across the whole stack (i3 bar, WezTerm, alacritty, rofi, Typora, GTK apps, the boot splash)
 - Claude Code installed and auto-starting in a `~/workspace/` hub, with four built-in permission tiers (`personal-lab`, `engineer`, `staff`, `production-admin`)
+- Optional second surface for the same assistant on Telegram via [Hermes Agent](https://hermes-agent.nousresearch.com/) (recommended), sharing the workspace-hub knowledge layer with Claude Code so you can jump between terminal and phone without re-explaining context
 - The toolchain a dev needs out of the box: Edge, Chrome, btop, bat, glow, Typora, git, build essentials
 
 **What's different about it:**
@@ -79,13 +80,14 @@ Future work — fully hands-off provisioning from a hypervisor API (e.g., Proxmo
 - Ubuntu Server 24.04 LTS as the base
 - xrdp + xorgxrdp for RDP access (Tailscale-friendly)
 - i3 window manager (Tokyo Night theme, JetBrainsMono Nerd Font)
-- Alacritty terminal, rofi launcher, flameshot screenshots, feh wallpaper, thunar file manager
+- WezTerm + Alacritty terminals, rofi launcher, flameshot screenshots, feh wallpaper, thunar file manager
 - Browsers: Microsoft Edge, Google Chrome, Chromium (snap), Firefox (snap)
 - Markdown editor: Typora (with Tokyo Night theme installed)
 - Terminal tools: btop, bat, glow (markdown viewer)
 - A small daemon that puts the active window title next to the workspace number on the i3 top bar
 - System-wide dark mode (Adwaita-dark for GTK apps; Qt apps follow GTK)
 - Custom Plymouth boot splash (UAP logo on Tokyo Night background — visible on hypervisor console / bare-metal display)
+- **Optional Telegram surface:** [Hermes Agent](https://hermes-agent.nousresearch.com/) (Nous Research, MIT) is the recommended way to reach the same assistant from your phone. Hermes runs as a systemd service, shares `~/workspace/CLAUDE.md` and `~/.hermes/SOUL.md` + memories with Claude Code, and is documented as a UAP component at `ai/hermes-agent/`.
 
 ## Layout of this folder
 
@@ -103,11 +105,12 @@ profiles/                       # pre-canned identity.yaml files (skip the wizar
   staff.yaml                    # prompts on, no concierge / remote-control; non-technical users
   production-admin.yaml         # prompts on, no autostart; M365 / GitHub / servers / client data
 os/                             # system chrome — what Ubuntu looks like
-  i3/, alacritty/, rofi/, xinitrc/, typora-themes/
+  i3/, alacritty/, wezterm/, rofi/, xinitrc/, typora-themes/
   gtk-theme/, plymouth/, xrdp/, workspace-title-daemon/
-ai/                             # Claude-Code-facing pieces
+ai/                             # AI-assistant-facing pieces
   workspace-hub/                # ~/workspace/CLAUDE.md router template (ICM Layer 0)
   desktop-entries/              # rofi launcher + icon for "Claude (workspace)"
+  hermes-agent/                 # Optional Telegram surface — install + SOUL.md / USER.md / MEMORY.md / systemd drop-in
 workflows/                      # reusable workflow patterns (each with its own CLAUDE.md)
   dev/, helpdesk/, incidents/, requirements/
 ```
@@ -175,6 +178,21 @@ sudo apt install -y \
 sudo snap install chromium
 sudo snap install firefox
 sudo snap install glow
+```
+
+### WezTerm terminal
+
+WezTerm is installed from the upstream GitHub `.deb` and configured by the `wezterm` component:
+
+```bash
+ver=20240203-110809-5046fc22
+base="https://github.com/wez/wezterm/releases/download/$ver"
+cd /tmp
+curl -fLO "$base/wezterm-$ver.Ubuntu22.04.deb"
+curl -fLO "$base/wezterm-$ver.Ubuntu22.04.deb.sha256"
+sha256sum -c "wezterm-$ver.Ubuntu22.04.deb.sha256"
+sudo apt install -y "./wezterm-$ver.Ubuntu22.04.deb"
+~/uap/setup/apply.sh wezterm
 ```
 
 If `microsoft-edge-stable` is not in the default repos:
@@ -387,6 +405,16 @@ If you don't want the autostart on a specific login, kill it after start (`pkill
 
 Both share the same command, so behavior is identical: alacritty in `~/workspace/`, Claude with `bypassPermissions` and remote-control on.
 
+## Phase 8.65 — Hermes Agent (Telegram surface, recommended)
+
+UAP's recommended way to reach the operator's assistant from a phone is [Hermes Agent](https://hermes-agent.nousresearch.com/) (Nous Research, MIT-licensed) running on Telegram. Hermes is treated as a second surface of the same assistant Claude Code presents in the terminal — not a separate persona. It runs as a systemd service, talks to a bot you create in @BotFather, and shares Claude Code's knowledge layer on this machine: identity in `~/.hermes/SOUL.md`, bounded operator profile + environment memory in `~/.hermes/memories/`, and the same project-context router (`~/workspace/CLAUDE.md`) discovered from the gateway's working directory. The result: you can switch between the terminal Claude session and the Telegram bot without re-explaining who you are, what UAP is, or what you're working on.
+
+```bash
+~/uap/ai/hermes-agent/  # install + configure narrative, drop-in, and source-of-truth copies of SOUL.md, USER.md, MEMORY.md
+```
+
+Install is currently manual (not yet wired into `apply.sh`); see `~/uap/ai/hermes-agent/README.md` for the step-by-step. The critical UAP-specific piece is the systemd drop-in at `/etc/systemd/system/hermes-gateway.service.d/uap-override.conf` that sets `WorkingDirectory=/home/<user>/workspace` — survives `hermes gateway install --system` regenerating the main unit and ensures every Telegram conversation auto-loads the workspace-hub `CLAUDE.md`.
+
 ## Phase 8.5 — System-wide dark mode (GTK + Qt)
 
 i3 doesn't bring a desktop environment, so GTK and Qt apps default to light themes (you'll see white menu bars in Typora, Thunar, Edge, Chrome, flameshot, etc.). Make them all dark:
@@ -519,3 +547,4 @@ After deploy, confirm in this order:
 5. `pgrep -f i3-workspace-title` returns one PID
 6. `cat /etc/xrdp/reconnectwm.sh` matches `os/xrdp/reconnectwm.sh`
 7. `sudo update-alternatives --display default.plymouth` shows the UAP theme as the active link
+8. `systemctl is-active hermes-gateway` → `active` and `sudo readlink /proc/$(systemctl show -p MainPID --value hermes-gateway)/cwd` prints `/home/<user>/workspace`

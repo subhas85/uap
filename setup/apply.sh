@@ -490,6 +490,42 @@ install_alacritty() {
     log "alacritty: installed config to $target/alacritty.toml"
 }
 
+install_wezterm_package() {
+    if dpkg -s wezterm >/dev/null 2>&1; then
+        log "wezterm: package already installed"
+        return 0
+    fi
+
+    local version="20240203-110809-5046fc22"
+    local deb="wezterm-${version}.Ubuntu22.04.deb"
+    local base="https://github.com/wez/wezterm/releases/download/${version}"
+    local tmpdir
+    tmpdir=$(mktemp -d)
+
+    log "wezterm: downloading upstream Ubuntu .deb"
+    curl -fsSL -o "$tmpdir/$deb" "$base/$deb"
+    curl -fsSL -o "$tmpdir/$deb.sha256" "$base/$deb.sha256"
+    (cd "$tmpdir" && sha256sum -c "$deb.sha256")
+    run_sudo env DEBIAN_FRONTEND=noninteractive apt-get install -y "$tmpdir/$deb"
+    rm -rf "$tmpdir"
+}
+
+install_wezterm() {
+    local render="$RENDER_DIR/wezterm"
+    local target="$HOME_DIR/.config/wezterm"
+
+    if [ "$DRY_RUN" = 1 ]; then
+        log "wezterm: DRY-RUN — would install upstream WezTerm .deb"
+        log "wezterm: DRY-RUN — would install $target/wezterm.lua"
+        return 0
+    fi
+
+    install_wezterm_package
+    install -d "$target"
+    install -m 644 "$render/wezterm.lua" "$target/wezterm.lua"
+    log "wezterm: installed config to $target/wezterm.lua"
+}
+
 install_rofi() {
     local render="$RENDER_DIR/rofi"
     local target="$HOME_DIR/.config/rofi"
@@ -538,7 +574,8 @@ install_plymouth() {
 
 # --- install_apps: operator-facing apps from identity.apps.* --------------
 # Browsers, markdown editor, file manager, screenshot tool, terminal tools.
-# Each can be apt, snap, or apt-via-third-party-repo — handled in helpers.
+# Browsers come from upstream apt repos (chrome, edge, firefox); snap is only
+# used as a fallback for tools without a clean deb path.
 
 install_edge() {
     if dpkg -s microsoft-edge-stable >/dev/null 2>&1; then
@@ -564,6 +601,47 @@ install_chrome() {
         | run_sudo tee /etc/apt/sources.list.d/google-chrome.list >/dev/null
     APT_UPDATED=0
     apt_install google-chrome-stable
+}
+
+install_firefox() {
+    # Set up Mozilla's apt repo (idempotent). Mozilla's deb is preferred over
+    # the Ubuntu transitional snap pkg via a Pin-Priority of 1000.
+    if [ ! -f /etc/apt/sources.list.d/mozilla.list ] || [ ! -f /etc/apt/preferences.d/mozilla ]; then
+        log "apps: setting up Mozilla apt repo"
+        run_sudo install -d -m 0755 /etc/apt/keyrings
+        curl -fsSL https://packages.mozilla.org/apt/repo-signing-key.gpg \
+            | run_sudo tee /etc/apt/keyrings/packages.mozilla.org.asc >/dev/null
+        echo "deb [signed-by=/etc/apt/keyrings/packages.mozilla.org.asc] https://packages.mozilla.org/apt mozilla main" \
+            | run_sudo tee /etc/apt/sources.list.d/mozilla.list >/dev/null
+        cat <<'PIN' | run_sudo tee /etc/apt/preferences.d/mozilla >/dev/null
+Package: *
+Pin: origin packages.mozilla.org
+Pin-Priority: 1000
+PIN
+        APT_UPDATED=0
+    fi
+
+    # The Ubuntu "firefox" deb is a transitional snap wrapper with version 1:1snap*.
+    # If that's what's installed, force an upgrade to the Mozilla deb (apt_install
+    # alone would no-op since the package name is already present).
+    local ver
+    ver=$(dpkg-query -W -f='${Version}' firefox 2>/dev/null || true)
+    case "$ver" in
+        ""|1:1snap*) ;;  # not installed, or snap transitional — proceed
+        *)           log "apps: firefox already installed from mozilla apt repo (v$ver)"; return 0 ;;
+    esac
+
+    log "apps: installing firefox from mozilla apt repo"
+    if [ "$APT_UPDATED" = 0 ]; then
+        log "apt-get update (once per run)..."
+        run_sudo apt-get update -qq
+        APT_UPDATED=1
+    fi
+    # --allow-downgrades: the Ubuntu snap-transitional pkg has epoch "1:" baked
+    # into its version (e.g. 1:1snap1-0ubuntu5), which apt sees as newer than
+    # the Mozilla deb (e.g. 150.0.3~build1). The pin still forces Mozilla; this
+    # flag just suppresses apt's safety prompt about the version-number drop.
+    run_sudo env DEBIAN_FRONTEND=noninteractive apt-get install -y --allow-downgrades firefox
 }
 
 install_typora() {
@@ -602,8 +680,8 @@ install_apps() {
         case "$b" in
             edge)     install_edge ;;
             chrome)   install_chrome ;;
-            chromium) run_sudo snap install chromium ;;
-            firefox)  run_sudo snap install firefox ;;
+            chromium) warn "apps: chromium snap install is no longer supported — use 'chrome' or add a chromium PPA manually" ;;
+            firefox)  install_firefox ;;
             brave|"") : ;;
             *)        warn "apps: unknown browser '$b' — skipping" ;;
         esac
