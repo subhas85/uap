@@ -328,17 +328,39 @@ fix_c_restart_chansrv_notify() {
     sudo -u "$user" DISPLAY=":$display" XAUTHORITY="$xauth" XRDP_SESSION="$display" \
         nohup /usr/sbin/xrdp-chansrv >>"/var/log/xrdp/chansrv-${display}.log" 2>&1 &
 
-    # Notify the user (soft dep)
-    if sudo -u "$user" DISPLAY=":$display" command -v notify-send >/dev/null 2>&1; then
-        sudo -u "$user" DISPLAY=":$display" notify-send -u normal -t 10000 \
-            "xrdp clipboard restarted" \
-            "Disconnect and reconnect your RDP client to restore copy/paste." \
-            2>/dev/null || log warning "fix_c: notify-send failed"
+    # Notify the user (soft dep). Requires DBUS_SESSION_BUS_ADDRESS in addition to DISPLAY
+    # so the notification reaches the user's per-session notification daemon.
+    local notify_ok=0
+    local dbus_addr
+    # Try to find a live user process with DBUS_SESSION_BUS_ADDRESS set
+    # (e.g., the user's i3/desktop session). Look at user procs on this display.
+    dbus_addr=$(pgrep -u "$user" | while read -r p; do
+        addr=$(sudo cat /proc/"$p"/environ 2>/dev/null | tr '\0' '\n' | grep '^DBUS_SESSION_BUS_ADDRESS=' | head -1)
+        [ -n "$addr" ] && echo "$addr" && break
+    done | head -1)
+    dbus_addr="${dbus_addr#DBUS_SESSION_BUS_ADDRESS=}"
+
+    if [ -z "$dbus_addr" ]; then
+        log warning "fix_c: DBUS_SESSION_BUS_ADDRESS not found for user=$user; notification skipped"
+    elif ! sudo -u "$user" DISPLAY=":$display" command -v notify-send >/dev/null 2>&1; then
+        log warning "fix_c: notify-send unavailable; notification skipped"
     else
-        log warning "fix_c: notify-send unavailable, skipping notification"
+        if sudo -u "$user" DISPLAY=":$display" DBUS_SESSION_BUS_ADDRESS="$dbus_addr" \
+                notify-send -u normal -t 10000 \
+                "xrdp clipboard restarted" \
+                "Disconnect and reconnect your RDP client to restore copy/paste." \
+                2>/dev/null; then
+            notify_ok=1
+        else
+            log warning "fix_c: notify-send invocation failed"
+        fi
     fi
 
-    log info "fix_c: respawned chansrv for cliprdr desync display=$display user=$user; user notified"
+    if [ "$notify_ok" = "1" ]; then
+        log info "fix_c: respawned chansrv for cliprdr desync display=$display user=$user; user notified"
+    else
+        log info "fix_c: respawned chansrv for cliprdr desync display=$display user=$user; notification not delivered"
+    fi
     return 0
 }
 
