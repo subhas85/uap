@@ -10,6 +10,7 @@ VERSION="0.1.0"
 MODE="tick"        # tick | check | explain | once | help
 DRY_RUN=0
 LOG_LEVEL="info"   # debug | info | warning | error
+WATCHDOG_INTERVAL_SECONDS="${WATCHDOG_INTERVAL_SECONDS:-30}"
 
 # --- helper shims (env-overrideable for tests) ---
 # Each shim prints state to stdout. Tests can override the function entirely
@@ -172,7 +173,20 @@ check_b_chansrv_health() {
     done
     echo "OK"
 }
-check_c_cliprdr_log_scan() { echo "OK"; }
+check_c_cliprdr_log_scan() {
+    local since="${WATCHDOG_INTERVAL_SECONDS:-30}"
+    local log_chunk
+    log_chunk=$(_journalctl_recent_errors "${since} seconds ago")
+    if echo "$log_chunk" | grep -qE 'clipboard_event_selection_request|\[ERROR\] cliprdr_|cliprdr.*unknown target'; then
+        # Affected display: try to extract from the error, else default to first active display
+        local display
+        display=$(echo "$log_chunk" | grep -oE 'display[: =][0-9]+' | head -1 | grep -oE '[0-9]+')
+        [ -z "$display" ] && display=$(_list_active_displays | head -1)
+        echo "BAD: cliprdr desync display=$display"
+        return 0
+    fi
+    echo "OK"
+}
 
 fix_a_kill_stale() {
     local bad_line="$1"
@@ -273,7 +287,60 @@ fix_b_respawn_chansrv() {
     log info "fix_b: respawned chansrv for display=$display user=$user"
     return 0
 }
-fix_c_restart_chansrv_notify() { log info "fix_c: stub"; }
+fix_c_restart_chansrv_notify() {
+    local bad_line="$1"
+    local display
+    display=$(echo "$bad_line" | grep -oE 'display=[0-9]+' | sed 's|display=||')
+    [ -z "$display" ] && return 1
+
+    # Resolve user (same path as Fix B)
+    local sesman_pid user xauth
+    sesman_pid=$(pgrep -f "xrdp-sesman" | while read -r p; do
+        env_disp=$(sudo cat /proc/$p/environ 2>/dev/null | tr '\0' '\n' | grep "^DISPLAY=:$display\$")
+        [ -n "$env_disp" ] && echo "$p" && break
+    done | head -1)
+
+    if [ -z "$sesman_pid" ]; then
+        if [ "$DRY_RUN" = "1" ]; then
+            log info "fix_c: would respawn chansrv for display=$display and notify (sesman not found in dry-run env)"
+            return 0
+        fi
+        log warning "fix_c: no sesman for display=$display"
+        return 1
+    fi
+    user=$(sudo cat /proc/"$sesman_pid"/environ 2>/dev/null | tr '\0' '\n' | grep '^USER=' | sed 's|USER=||')
+    xauth=$(sudo cat /proc/"$sesman_pid"/environ 2>/dev/null | tr '\0' '\n' | grep '^XAUTHORITY=' | sed 's|XAUTHORITY=||')
+    [ -z "$xauth" ] && xauth="/home/$user/.Xauthority"
+
+    if [ "$DRY_RUN" = "1" ]; then
+        log info "fix_c: would respawn chansrv for display=$display user=$user and notify"
+        return 0
+    fi
+
+    # Kill and respawn chansrv (same as Fix B body)
+    local existing
+    existing=$(pgrep -P "$sesman_pid" -f xrdp-chansrv || true)
+    if [ -n "$existing" ]; then
+        sudo kill -TERM "$existing" 2>/dev/null || true
+        sleep 2
+        sudo kill -KILL "$existing" 2>/dev/null || true
+    fi
+    sudo -u "$user" DISPLAY=":$display" XAUTHORITY="$xauth" XRDP_SESSION="$display" \
+        nohup /usr/sbin/xrdp-chansrv >>"/var/log/xrdp/chansrv-${display}.log" 2>&1 &
+
+    # Notify the user (soft dep)
+    if sudo -u "$user" DISPLAY=":$display" command -v notify-send >/dev/null 2>&1; then
+        sudo -u "$user" DISPLAY=":$display" notify-send -u normal -t 10000 \
+            "xrdp clipboard restarted" \
+            "Disconnect and reconnect your RDP client to restore copy/paste." \
+            2>/dev/null || log warning "fix_c: notify-send failed"
+    else
+        log warning "fix_c: notify-send unavailable, skipping notification"
+    fi
+
+    log info "fix_c: respawned chansrv for cliprdr desync display=$display user=$user; user notified"
+    return 0
+}
 
 # --- CLI ---
 print_help() {
