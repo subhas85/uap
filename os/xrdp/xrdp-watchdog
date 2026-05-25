@@ -160,7 +160,18 @@ check_a_stale_xrdp_child() {
     done
     echo "OK"
 }
-check_b_chansrv_health()   { echo "OK"; }
+check_b_chansrv_health() {
+    local displays d state
+    displays=$(_list_active_displays)
+    for d in $displays; do
+        state=$(_get_chansrv_socket_state "$d")
+        if [ "$state" = "MISSING" ]; then
+            echo "BAD: chansrv socket missing display=$d"
+            return 0
+        fi
+    done
+    echo "OK"
+}
 check_c_cliprdr_log_scan() { echo "OK"; }
 
 fix_a_kill_stale() {
@@ -202,7 +213,66 @@ fix_a_kill_stale() {
     log info "fix_a: fixed stale xrdp child pid=$pid for display=$display"
     return 0
 }
-fix_b_respawn_chansrv() { log info "fix_b: stub"; }
+fix_b_respawn_chansrv() {
+    local bad_line="$1"
+    local display
+    display=$(echo "$bad_line" | grep -oE 'display=[0-9]+' | sed 's|display=||')
+    [ -z "$display" ] && log warning "fix_b: no display in BAD line" && return 1
+
+    # Find session owner via the per-session sesman process (parent-PID guard)
+    local sesman_pid user xauth
+    sesman_pid=$(pgrep -f "xrdp-sesman" | while read -r p; do
+        env_disp=$(sudo cat /proc/$p/environ 2>/dev/null | tr '\0' '\n' | grep "^DISPLAY=:$display\$")
+        [ -n "$env_disp" ] && echo "$p" && break
+    done | head -1)
+
+    if [ -z "$sesman_pid" ]; then
+        if [ "$DRY_RUN" = "1" ]; then
+            log info "fix_b: would respawn chansrv for display=$display (sesman not found in dry-run env)"
+            return 0
+        fi
+        log warning "fix_b: cannot find sesman for display=$display"
+        return 1
+    fi
+
+    user=$(sudo cat /proc/"$sesman_pid"/environ 2>/dev/null | tr '\0' '\n' | grep '^USER=' | sed 's|USER=||')
+    xauth=$(sudo cat /proc/"$sesman_pid"/environ 2>/dev/null | tr '\0' '\n' | grep '^XAUTHORITY=' | sed 's|XAUTHORITY=||')
+    [ -z "$user" ]   && log warning "fix_b: no USER in sesman env"   && return 1
+    [ -z "$xauth" ]  && xauth="/home/$user/.Xauthority"
+
+    if [ "$DRY_RUN" = "1" ]; then
+        log info "fix_b: would respawn chansrv for display=$display user=$user xauth=$xauth"
+        return 0
+    fi
+
+    # Kill any defunct chansrv whose parent is this sesman
+    local existing_chansrv
+    existing_chansrv=$(pgrep -P "$sesman_pid" -f xrdp-chansrv || true)
+    if [ -n "$existing_chansrv" ]; then
+        log info "fix_b: killing defunct chansrv pid=$existing_chansrv"
+        sudo kill -TERM "$existing_chansrv" 2>/dev/null || true
+        sleep 2
+        sudo kill -KILL "$existing_chansrv" 2>/dev/null || true
+    fi
+
+    log info "fix_b: respawning chansrv for display=$display user=$user"
+    sudo -u "$user" DISPLAY=":$display" XAUTHORITY="$xauth" XRDP_SESSION="$display" \
+        nohup /usr/sbin/xrdp-chansrv >>"/var/log/xrdp/chansrv-${display}.log" 2>&1 &
+
+    # Wait for socket
+    local i=0 state
+    while [ $i -lt 3 ]; do
+        state=$(_get_chansrv_socket_state "$display")
+        [ "$state" != "MISSING" ] && break
+        sleep 1; i=$((i+1))
+    done
+    if [ "$state" = "MISSING" ]; then
+        log warning "fix_b: socket still missing after respawn for display=$display"
+        return 1
+    fi
+    log info "fix_b: respawned chansrv for display=$display user=$user"
+    return 0
+}
 fix_c_restart_chansrv_notify() { log info "fix_c: stub"; }
 
 # --- CLI ---
