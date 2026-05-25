@@ -51,6 +51,10 @@ network:
 xrdp:
   sesman_policy: UBD
   install_reconnectwm: true
+  install_watchdog: auto                  # true | false | auto (auto = on if policy is U|UB)
+  watchdog_interval_seconds: 30
+  watchdog_clipboard_active_probe: false  # opt-in, touches clipboard every tick
+  tcp_keepalive: true                     # patches /etc/xrdp/xrdp.ini [Globals]
 
 apps:
   browsers: [edge, chrome]
