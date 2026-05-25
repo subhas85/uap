@@ -336,6 +336,7 @@ install_xrdp() {
     if [ "$DRY_RUN" = 1 ]; then
         log "xrdp: DRY-RUN — would apt install xrdp xorgxrdp"
         log "xrdp: DRY-RUN — would patch /etc/xrdp/sesman.ini Policy to ${SESMAN_POLICY}"
+        [ "$TCP_KEEPALIVE" = "true" ] && log "xrdp: DRY-RUN — would ensure tcp_keepalive=true in xrdp.ini [Globals]"
         [ "$INSTALL_RECONNECTWM" = "true" ] && log "xrdp: DRY-RUN — would install /etc/xrdp/reconnectwm.sh"
         if [ -n "$RDP_LCID" ] && [ "$RDP_LCID" != "0x00000409" ]; then
             local lcid_lower="${RDP_LCID#0x}"
@@ -362,6 +363,21 @@ install_xrdp() {
         fi
     else
         warn "xrdp: /etc/xrdp/sesman.ini not found even after apt install — skipping Policy patch"
+    fi
+
+    # 2b. Patch /etc/xrdp/xrdp.ini [Globals] tcp_keepalive (idempotent)
+    if [ "$TCP_KEEPALIVE" = "true" ] && [ -f /etc/xrdp/xrdp.ini ]; then
+        if ! grep -qE '^tcp_keepalive=true' /etc/xrdp/xrdp.ini; then
+            if grep -qE '^tcp_keepalive=' /etc/xrdp/xrdp.ini; then
+                run_sudo sed -i 's/^tcp_keepalive=.*/tcp_keepalive=true/' /etc/xrdp/xrdp.ini
+            else
+                # Insert after [Globals] header (first line matching exactly that)
+                run_sudo sed -i '/^\[Globals\]$/a tcp_keepalive=true' /etc/xrdp/xrdp.ini
+            fi
+            log "xrdp: xrdp.ini tcp_keepalive=true patched"
+        else
+            log "xrdp: xrdp.ini tcp_keepalive already true"
+        fi
     fi
 
     # 3. Install reconnectwm.sh (stuck-modifier release after RDP reconnect)
