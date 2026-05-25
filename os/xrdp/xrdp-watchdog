@@ -35,22 +35,19 @@ _list_xrdp_children() {
 _get_chansrv_socket_state() {
     local display="$1"
     if [ "${XRDP_WATCHDOG_TEST_CHANSRV_SOCKET:-0}" = "1" ]; then
-        # Fake state via env: XRDP_WATCHDOG_FAKE_CHANSRV_<N>=LISTEN|CONNECTED|MISSING
+        # Fake state via env: XRDP_WATCHDOG_FAKE_CHANSRV_<N>=LISTEN|MISSING
         local var="XRDP_WATCHDOG_FAKE_CHANSRV_${display}"
         echo "${!var:-MISSING}"
         return 0
     fi
-    local sock="/run/xrdp/sockdir/xrdp_chansrv_socket_${display}"
-    if [ ! -S "$sock" ]; then
-        echo "MISSING"
-        return 0
-    fi
-    # If lsof shows the socket has a peer that's a live xrdp child = CONNECTED;
-    # else (only chansrv itself listening) = LISTEN.
-    if _priv lsof -U 2>/dev/null | grep -qE "xrdp_chansrv_socket_${display}.*type=STREAM.*CONNECTED"; then
-        echo "CONNECTED"
-    else
+    # xrdp uses unlinked Unix sockets: bound to a path then unlinked from the FS.
+    # The socket exists in the kernel namespace (visible via `ss -lxn`) but not as a
+    # filesystem entry. `[ -S file ]` would always return false here.
+    local sock_path="/run/xrdp/sockdir/xrdp_chansrv_socket_${display}"
+    if _priv ss -lxn 2>/dev/null | grep -qF "$sock_path"; then
         echo "LISTEN"
+    else
+        echo "MISSING"
     fi
 }
 
