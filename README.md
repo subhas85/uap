@@ -524,6 +524,46 @@ On Proxmox, set the VM's memory ballooning *off* if you allocate a specific RAM 
 
 ---
 
+## Known issues — RDP reconnect bugs (auto-fixed by watchdog)
+
+xrdp 0.9.x has three reconnect bugs that affect users running stricter session-reattach policies (`Policy=U` or `Policy=UB`). UAP ships an optional `xrdp-watchdog` that auto-detects and remediates them. Defaults to **auto** — enabled when the policy is `U`/`UB`, disabled on the conservative `UBD` default.
+
+### The bugs
+
+1. **Black screen on reconnect** — a stale xrdp child from an unclean disconnect holds the chansrv socket; new connections see black until the stale child is killed.
+2. **chansrv missing/defunct** — `xrdp-chansrv` dies mid-session without a parent respawn; clipboard/audio/drive redirection silently stop working.
+3. **Clipboard desync (cliprdr)** — chansrv's cliprdr channel state corrupts on disconnect; new mstsc connect inherits broken state. Fixing requires chansrv restart **plus** the operator must disconnect + reconnect mstsc for the cliprdr handshake to redo.
+
+### Identity toggles
+
+```yaml
+# ~/uap.local/identity.yaml
+xrdp:
+  install_watchdog: auto                  # true | false | auto
+  watchdog_interval_seconds: 30
+  watchdog_clipboard_active_probe: false  # opt-in active clipboard probe
+  tcp_keepalive: true                     # patches xrdp.ini [Globals]
+```
+
+### Inspect / control
+
+```bash
+systemctl status xrdp-watchdog.timer
+journalctl -u xrdp-watchdog -f
+xrdp-watchdog --check       # dry-run diagnostics
+xrdp-watchdog --explain     # dump current xrdp/chansrv/display state
+```
+
+### Disable
+
+Set `install_watchdog: false` in `~/uap.local/identity.yaml` and rerun `~/uap/setup/apply.sh`. The watchdog and its timer will be cleanly removed.
+
+### Design rationale
+
+See `docs/specs/2026-05-23-xrdp-watchdogs-design.md`.
+
+---
+
 ## Per-user state that is NOT in this folder
 
 These are intentionally outside the runbook and need to be redone manually:
