@@ -47,7 +47,7 @@ _get_chansrv_socket_state() {
     fi
     # If lsof shows the socket has a peer that's a live xrdp child = CONNECTED;
     # else (only chansrv itself listening) = LISTEN.
-    if sudo lsof -U 2>/dev/null | grep -qE "xrdp_chansrv_socket_${display}.*type=STREAM.*CONNECTED"; then
+    if _priv lsof -U 2>/dev/null | grep -qE "xrdp_chansrv_socket_${display}.*type=STREAM.*CONNECTED"; then
         echo "CONNECTED"
     else
         echo "LISTEN"
@@ -90,7 +90,7 @@ _get_pid_display() {
     fi
     # Inspect xrdp child's open files to determine which display it serves.
     # xrdp children typically have an open fd on /run/xrdp/sockdir/xrdp_chansrv_socket_<N>
-    sudo lsof -p "$pid" 2>/dev/null | grep -oE 'xrdp_chansrv_socket_[0-9]+' | head -1 | sed 's|.*_||'
+    _priv lsof -p "$pid" 2>/dev/null | grep -oE 'xrdp_chansrv_socket_[0-9]+' | head -1 | sed 's|.*_||'
 }
 
 _pid_tcp_dead() {
@@ -108,7 +108,7 @@ _pid_tcp_dead() {
     # If `last data recv` > 600s ago AND age > 60s, treat as dead.
     # Relies on kernel TCP keepalive (tcp_keepalive=true in xrdp.ini) for socket teardown.
     local recv_age
-    recv_age=$(sudo ss -tnoi 2>/dev/null | \
+    recv_age=$(_priv ss -tnoi 2>/dev/null | \
         awk -v pid="$pid" '$0 ~ ":3389" && $0 ~ "pid="pid {getline; print}' | \
         grep -oE 'lastrcv:[0-9]+' | head -1 | sed 's|lastrcv:||')
     [ -z "$recv_age" ] && return 1   # no recv-age info → don't kill
@@ -125,10 +125,18 @@ _journalctl_recent_errors() {
     journalctl -u xrdp -u xrdp-sesman --since "$since" --no-pager 2>/dev/null || true
 }
 
+_priv() {
+    if [ "$(id -u)" = "0" ]; then
+        "$@"
+    else
+        sudo "$@"
+    fi
+}
+
 # --- safety guards ---
 _ensure_state_dir() {
     [ -d "$STATE_DIR" ] || mkdir -p "$STATE_DIR" 2>/dev/null || \
-        { sudo mkdir -p "$STATE_DIR" && sudo chown "$(whoami)" "$STATE_DIR"; }
+        { _priv mkdir -p "$STATE_DIR" && _priv chown "$(whoami)" "$STATE_DIR"; }
 }
 
 _fix_within_backoff() {
@@ -267,14 +275,14 @@ fix_a_kill_stale() {
     fi
 
     log info "fix_a: killing stale xrdp child pid=$pid display=$display"
-    sudo kill -TERM "$pid" 2>/dev/null || true
+    _priv kill -TERM "$pid" 2>/dev/null || true
     local i=0
-    while [ $i -lt 5 ] && sudo kill -0 "$pid" 2>/dev/null; do
+    while [ $i -lt 5 ] && _priv kill -0 "$pid" 2>/dev/null; do
         sleep 1; i=$((i+1))
     done
-    if sudo kill -0 "$pid" 2>/dev/null; then
+    if _priv kill -0 "$pid" 2>/dev/null; then
         log warning "fix_a: pid=$pid did not exit on TERM, sending KILL"
-        sudo kill -KILL "$pid" 2>/dev/null || true
+        _priv kill -KILL "$pid" 2>/dev/null || true
     fi
 
     # Verify chansrv socket is back to LISTEN
@@ -296,7 +304,7 @@ fix_b_respawn_chansrv() {
     # Find session owner via the per-session sesman process (parent-PID guard)
     local sesman_pid user xauth
     sesman_pid=$(pgrep -f "xrdp-sesman" | while read -r p; do
-        env_disp=$(sudo cat /proc/$p/environ 2>/dev/null | tr '\0' '\n' | grep "^DISPLAY=:$display\$")
+        env_disp=$(_priv cat /proc/$p/environ 2>/dev/null | tr '\0' '\n' | grep "^DISPLAY=:$display\$")
         [ -n "$env_disp" ] && echo "$p" && break
     done | head -1)
 
@@ -309,8 +317,8 @@ fix_b_respawn_chansrv() {
         return 1
     fi
 
-    user=$(sudo cat /proc/"$sesman_pid"/environ 2>/dev/null | tr '\0' '\n' | grep '^USER=' | sed 's|USER=||')
-    xauth=$(sudo cat /proc/"$sesman_pid"/environ 2>/dev/null | tr '\0' '\n' | grep '^XAUTHORITY=' | sed 's|XAUTHORITY=||')
+    user=$(_priv cat /proc/"$sesman_pid"/environ 2>/dev/null | tr '\0' '\n' | grep '^USER=' | sed 's|USER=||')
+    xauth=$(_priv cat /proc/"$sesman_pid"/environ 2>/dev/null | tr '\0' '\n' | grep '^XAUTHORITY=' | sed 's|XAUTHORITY=||')
     [ -z "$user" ]   && log warning "fix_b: no USER in sesman env"   && return 1
     [ -z "$xauth" ]  && xauth="/home/$user/.Xauthority"
 
@@ -324,9 +332,9 @@ fix_b_respawn_chansrv() {
     existing_chansrv=$(pgrep -P "$sesman_pid" -f xrdp-chansrv || true)
     if [ -n "$existing_chansrv" ]; then
         log info "fix_b: killing defunct chansrv pid=$existing_chansrv"
-        sudo kill -TERM "$existing_chansrv" 2>/dev/null || true
+        _priv kill -TERM "$existing_chansrv" 2>/dev/null || true
         sleep 2
-        sudo kill -KILL "$existing_chansrv" 2>/dev/null || true
+        _priv kill -KILL "$existing_chansrv" 2>/dev/null || true
     fi
 
     log info "fix_b: respawning chansrv for display=$display user=$user"
@@ -356,7 +364,7 @@ fix_c_restart_chansrv_notify() {
     # Resolve user (same path as Fix B)
     local sesman_pid user xauth
     sesman_pid=$(pgrep -f "xrdp-sesman" | while read -r p; do
-        env_disp=$(sudo cat /proc/$p/environ 2>/dev/null | tr '\0' '\n' | grep "^DISPLAY=:$display\$")
+        env_disp=$(_priv cat /proc/$p/environ 2>/dev/null | tr '\0' '\n' | grep "^DISPLAY=:$display\$")
         [ -n "$env_disp" ] && echo "$p" && break
     done | head -1)
 
@@ -368,8 +376,8 @@ fix_c_restart_chansrv_notify() {
         log warning "fix_c: no sesman for display=$display"
         return 1
     fi
-    user=$(sudo cat /proc/"$sesman_pid"/environ 2>/dev/null | tr '\0' '\n' | grep '^USER=' | sed 's|USER=||')
-    xauth=$(sudo cat /proc/"$sesman_pid"/environ 2>/dev/null | tr '\0' '\n' | grep '^XAUTHORITY=' | sed 's|XAUTHORITY=||')
+    user=$(_priv cat /proc/"$sesman_pid"/environ 2>/dev/null | tr '\0' '\n' | grep '^USER=' | sed 's|USER=||')
+    xauth=$(_priv cat /proc/"$sesman_pid"/environ 2>/dev/null | tr '\0' '\n' | grep '^XAUTHORITY=' | sed 's|XAUTHORITY=||')
     [ -z "$xauth" ] && xauth="/home/$user/.Xauthority"
 
     if [ "$DRY_RUN" = "1" ]; then
@@ -381,9 +389,9 @@ fix_c_restart_chansrv_notify() {
     local existing
     existing=$(pgrep -P "$sesman_pid" -f xrdp-chansrv || true)
     if [ -n "$existing" ]; then
-        sudo kill -TERM "$existing" 2>/dev/null || true
+        _priv kill -TERM "$existing" 2>/dev/null || true
         sleep 2
-        sudo kill -KILL "$existing" 2>/dev/null || true
+        _priv kill -KILL "$existing" 2>/dev/null || true
     fi
     sudo -u "$user" DISPLAY=":$display" XAUTHORITY="$xauth" XRDP_SESSION="$display" \
         nohup /usr/sbin/xrdp-chansrv >>"/var/log/xrdp/chansrv-${display}.log" 2>&1 &
@@ -395,7 +403,7 @@ fix_c_restart_chansrv_notify() {
     # Try to find a live user process with DBUS_SESSION_BUS_ADDRESS set
     # (e.g., the user's i3/desktop session). Look at user procs on this display.
     dbus_addr=$(pgrep -u "$user" | while read -r p; do
-        addr=$(sudo cat /proc/"$p"/environ 2>/dev/null | tr '\0' '\n' | grep '^DBUS_SESSION_BUS_ADDRESS=' | head -1)
+        addr=$(_priv cat /proc/"$p"/environ 2>/dev/null | tr '\0' '\n' | grep '^DBUS_SESSION_BUS_ADDRESS=' | head -1)
         [ -n "$addr" ] && echo "$addr" && break
     done | head -1)
     dbus_addr="${dbus_addr#DBUS_SESSION_BUS_ADDRESS=}"
