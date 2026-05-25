@@ -120,7 +120,7 @@ export ACCENT_HEX URGENT_HEX GREEN_HEX YELLOW_HEX PURPLE_HEX CYAN_HEX
 export BORDER_HEX INACTIVE_HEX
 export MOD_KEY WORKSPACE_COUNT GTK_THEME
 export WORKSPACE_HUB_NAME PERMISSION_MODE
-export RDP_LCID SESMAN_POLICY INSTALL_RECONNECTWM
+export RDP_LCID SESMAN_POLICY INSTALL_RECONNECTWM INSTALL_WATCHDOG WATCHDOG_INTERVAL_SECONDS WATCHDOG_CLIP_ACTIVE TCP_KEEPALIVE
 export SUBWORKSPACES_BLOCK
 
 OS_NAME=$(yq         '.os.name'              "$IDENTITY")
@@ -162,6 +162,10 @@ PERMISSION_MODE=$(yq    '.ai.permission_mode'         "$IDENTITY")
 RDP_LCID=$(yq             '.locale.rdp_lcid'             "$IDENTITY")
 SESMAN_POLICY=$(yq        '.xrdp.sesman_policy'          "$IDENTITY")
 INSTALL_RECONNECTWM=$(yq  '.xrdp.install_reconnectwm'    "$IDENTITY")
+INSTALL_WATCHDOG=$(yq          '.xrdp.install_watchdog // "auto"'         "$IDENTITY")
+WATCHDOG_INTERVAL_SECONDS=$(yq '.xrdp.watchdog_interval_seconds // 30'    "$IDENTITY")
+WATCHDOG_CLIP_ACTIVE=$(yq      '.xrdp.watchdog_clipboard_active_probe // false' "$IDENTITY")
+TCP_KEEPALIVE=$(yq             '.xrdp.tcp_keepalive // true'              "$IDENTITY")
 
 # Generate the subworkspace markdown block from identity.ai.subworkspaces[]
 SUBWORKSPACES_BLOCK=$(
