@@ -2,6 +2,7 @@
 # Bash test harness for xrdp-watchdog.
 # Usage: ./run-tests.sh [test-file-glob]
 set -u
+set -a   # auto-export all variable assignments so inline env prefixes reach child processes
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 WATCHDOG_BIN="${WATCHDOG_BIN:-$SCRIPT_DIR/../xrdp-watchdog}"

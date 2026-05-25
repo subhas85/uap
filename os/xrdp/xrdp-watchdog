@@ -55,6 +55,60 @@ _list_active_displays() {
     ls /tmp/.X11-unix/X* 2>/dev/null | sed 's|.*X||' | sort -n
 }
 
+_get_pid_age_seconds() {
+    local pid="$1"
+    if [ "${XRDP_WATCHDOG_TEST_PID_AGES:-0}" = "1" ] || [ -n "${XRDP_WATCHDOG_FAKE_PID_AGES:-}" ]; then
+        # Parse "9001=300 9002=5"
+        local kv
+        for kv in ${XRDP_WATCHDOG_FAKE_PID_AGES:-}; do
+            local k="${kv%=*}" v="${kv#*=}"
+            [ "$k" = "$pid" ] && echo "$v" && return 0
+        done
+        echo "0"; return 0
+    fi
+    local started_ts
+    started_ts=$(ps -o etimes= -p "$pid" 2>/dev/null | tr -d ' ')
+    echo "${started_ts:-0}"
+}
+
+_get_pid_display() {
+    local pid="$1"
+    if [ "${XRDP_WATCHDOG_TEST_PID_DISPLAYS:-0}" = "1" ] || [ -n "${XRDP_WATCHDOG_FAKE_PID_DISPLAYS:-}" ]; then
+        local kv
+        for kv in ${XRDP_WATCHDOG_FAKE_PID_DISPLAYS:-}; do
+            local k="${kv%=*}" v="${kv#*=}"
+            [ "$k" = "$pid" ] && echo "$v" && return 0
+        done
+        echo ""; return 0
+    fi
+    # Inspect xrdp child's open files to determine which display it serves.
+    # xrdp children typically have an open fd on /run/xrdp/sockdir/xrdp_chansrv_socket_<N>
+    sudo lsof -p "$pid" 2>/dev/null | grep -oE 'xrdp_chansrv_socket_[0-9]+' | head -1 | sed 's|.*_||'
+}
+
+_pid_tcp_dead() {
+    local pid="$1"
+    if [ "${XRDP_WATCHDOG_TEST_PID_TCP_DEAD:-0}" = "1" ] || [ -n "${XRDP_WATCHDOG_FAKE_PID_TCP_DEAD:-}" ]; then
+        local kv
+        for kv in ${XRDP_WATCHDOG_FAKE_PID_TCP_DEAD:-}; do
+            local k="${kv%=*}" v="${kv#*=}"
+            [ "$k" = "$pid" ] && [ "$v" = "true" ] && return 0
+            [ "$k" = "$pid" ] && return 1
+        done
+        return 1
+    fi
+    # Real check: look at ss output for this pid's :3389 ESTABLISHED socket.
+    # If `last data recv` > 600s ago AND age > 60s, treat as dead.
+    # Relies on kernel TCP keepalive (tcp_keepalive=true in xrdp.ini) for socket teardown.
+    local recv_age
+    recv_age=$(sudo ss -tnoi 2>/dev/null | \
+        awk -v pid="$pid" '$0 ~ ":3389" && $0 ~ "pid="pid {getline; print}' | \
+        grep -oE 'lastrcv:[0-9]+' | head -1 | sed 's|lastrcv:||')
+    [ -z "$recv_age" ] && return 1   # no recv-age info → don't kill
+    [ "$recv_age" -gt 600000 ] && return 0   # ms; 10min no data = dead
+    return 1
+}
+
 _journalctl_recent_errors() {
     local since="${1:-1 minute ago}"
     if [ "${XRDP_WATCHDOG_TEST_JOURNAL:-0}" = "1" ]; then
@@ -71,15 +125,83 @@ log() {
         debug)   [ "$LOG_LEVEL" = "debug" ] || return 0 ;;
     esac
     logger -t "$PROG" -p "user.$level" -- "$*"
-    [ -t 1 ] && echo "[$level] $*"
+    echo "[$level] $*" >&2
 }
 
 # --- check/fix stubs (filled in by later tasks) ---
-check_a_stale_xrdp_child() { echo "OK"; }
+check_a_stale_xrdp_child() {
+    local children
+    children=$(_list_xrdp_children)
+    [ -z "$children" ] && echo "OK" && return 0
+
+    # Bucket children by display
+    declare -A by_display
+    local pid display
+    for pid in $children; do
+        display=$(_get_pid_display "$pid")
+        [ -z "$display" ] && continue
+        by_display[$display]="${by_display[$display]:-} $pid"
+    done
+
+    # For each display, find stale children. Solo-session guard: skip if only 1 child.
+    local d pids count age
+    for d in "${!by_display[@]}"; do
+        pids="${by_display[$d]}"
+        count=$(echo $pids | wc -w)
+        [ "$count" -lt 2 ] && continue  # solo session — never mark stale
+        for pid in $pids; do
+            age=$(_get_pid_age_seconds "$pid")
+            [ "$age" -lt 60 ] && continue
+            if _pid_tcp_dead "$pid"; then
+                echo "BAD: stale xrdp child pid=$pid display=$d age=${age}s"
+                return 0
+            fi
+        done
+    done
+    echo "OK"
+}
 check_b_chansrv_health()   { echo "OK"; }
 check_c_cliprdr_log_scan() { echo "OK"; }
 
-fix_a_kill_stale() { log info "fix_a: stub"; }
+fix_a_kill_stale() {
+    local bad_line="$1"
+    local pid display
+    pid=$(echo "$bad_line"   | grep -oE 'pid=[0-9]+'    | sed 's|pid=||')
+    display=$(echo "$bad_line" | grep -oE 'display=[0-9]+' | sed 's|display=||')
+    [ -z "$pid" ] && log warning "fix_a: no pid in BAD line: $bad_line" && return 1
+
+    # Re-verify staleness (world may have changed since detection)
+    if ! _pid_tcp_dead "$pid"; then
+        log info "fix_a: pid=$pid no longer stale, aborting"
+        return 0
+    fi
+
+    if [ "$DRY_RUN" = "1" ]; then
+        log info "fix_a: would kill stale xrdp child pid=$pid display=$display"
+        return 0
+    fi
+
+    log info "fix_a: killing stale xrdp child pid=$pid display=$display"
+    sudo kill -TERM "$pid" 2>/dev/null || true
+    local i=0
+    while [ $i -lt 5 ] && sudo kill -0 "$pid" 2>/dev/null; do
+        sleep 1; i=$((i+1))
+    done
+    if sudo kill -0 "$pid" 2>/dev/null; then
+        log warning "fix_a: pid=$pid did not exit on TERM, sending KILL"
+        sudo kill -KILL "$pid" 2>/dev/null || true
+    fi
+
+    # Verify chansrv socket is back to LISTEN
+    local state
+    state=$(_get_chansrv_socket_state "$display")
+    if [ "$state" != "LISTEN" ]; then
+        log warning "fix_a: chansrv socket for display=$display is $state, not LISTEN; no escalation"
+        return 1
+    fi
+    log info "fix_a: fixed stale xrdp child pid=$pid for display=$display"
+    return 0
+}
 fix_b_respawn_chansrv() { log info "fix_b: stub"; }
 fix_c_restart_chansrv_notify() { log info "fix_c: stub"; }
 
