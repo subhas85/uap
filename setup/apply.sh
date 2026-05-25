@@ -455,6 +455,24 @@ install_xrdp() {
         fi
     fi
 
+    # 9. Watchdog smoke test (skip in dry-run; only when just-installed)
+    if [ "$DRY_RUN" = 0 ] && [ "$watchdog_state" = "true" ]; then
+        /usr/local/bin/xrdp-watchdog --check >/dev/null 2>&1
+        local rc=$?
+        case "$rc" in
+            0) log "xrdp: xrdp-watchdog --check passed cleanly" ;;
+            1) log "xrdp: xrdp-watchdog --check reports findings (rc=1); install kept, see journalctl -u xrdp-watchdog" ;;
+            *)
+                warn "xrdp: xrdp-watchdog --check failed (rc=$rc); rolling back install"
+                run_sudo systemctl disable --now xrdp-watchdog.timer >/dev/null 2>&1 || true
+                run_sudo rm -f /etc/systemd/system/xrdp-watchdog.timer \
+                               /etc/systemd/system/xrdp-watchdog.service \
+                               /usr/local/bin/xrdp-watchdog
+                return 1
+                ;;
+        esac
+    fi
+
     log "xrdp: service enabled, port 3389 opened, key.pem perms set"
 }
 
