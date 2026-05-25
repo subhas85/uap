@@ -1,0 +1,17 @@
+[Unit]
+Description=xrdp watchdog (detect + remediate reconnect bugs)
+Documentation=file:///home/${OS_USER}/uap/docs/specs/2026-05-23-xrdp-watchdogs-design.md
+After=xrdp.service xrdp-sesman.service
+Wants=xrdp.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/xrdp-watchdog
+# Fail-open: never block xrdp if the watchdog itself errors
+SuccessExitStatus=0 1 2
+Nice=10
+IOSchedulingClass=best-effort
+IOSchedulingPriority=7
+# State dir auto-managed
+RuntimeDirectory=xrdp-watchdog
+RuntimeDirectoryMode=0755

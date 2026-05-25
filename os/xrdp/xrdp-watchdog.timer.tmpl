@@ -1,0 +1,12 @@
+[Unit]
+Description=Run xrdp-watchdog every ${WATCHDOG_INTERVAL_SECONDS}s
+Documentation=file:///home/${OS_USER}/uap/docs/specs/2026-05-23-xrdp-watchdogs-design.md
+
+[Timer]
+OnBootSec=60s
+OnUnitActiveSec=${WATCHDOG_INTERVAL_SECONDS}s
+AccuracySec=5s
+Persistent=false
+
+[Install]
+WantedBy=timers.target
