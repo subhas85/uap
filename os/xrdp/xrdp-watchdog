@@ -1,0 +1,159 @@
+#!/usr/bin/env bash
+# xrdp-watchdog — detects and remediates known xrdp reconnect bugs.
+# See: ~/uap/docs/specs/2026-05-23-xrdp-watchdogs-design.md
+set -u
+
+PROG="xrdp-watchdog"
+VERSION="0.1.0"
+
+# --- mode flags (set by parse_args) ---
+MODE="tick"        # tick | check | explain | once | help
+DRY_RUN=0
+LOG_LEVEL="info"   # debug | info | warning | error
+
+# --- helper shims (env-overrideable for tests) ---
+# Each shim prints state to stdout. Tests can override the function entirely
+# by exporting XRDP_WATCHDOG_TEST_<NAME>=1 and providing alternate output via
+# the matching env var.
+
+_list_xrdp_children() {
+    if [ "${XRDP_WATCHDOG_TEST_LIST_XRDP_CHILDREN:-0}" = "1" ]; then
+        echo "${XRDP_WATCHDOG_FAKE_XRDP_CHILDREN:-}"
+        return 0
+    fi
+    # PIDs of xrdp processes that are children of the xrdp listener.
+    pgrep -P "$(pgrep -x xrdp | head -1)" xrdp 2>/dev/null || true
+}
+
+_get_chansrv_socket_state() {
+    local display="$1"
+    if [ "${XRDP_WATCHDOG_TEST_CHANSRV_SOCKET:-0}" = "1" ]; then
+        # Fake state via env: XRDP_WATCHDOG_FAKE_CHANSRV_<N>=LISTEN|CONNECTED|MISSING
+        local var="XRDP_WATCHDOG_FAKE_CHANSRV_${display}"
+        echo "${!var:-MISSING}"
+        return 0
+    fi
+    local sock="/run/xrdp/sockdir/xrdp_chansrv_socket_${display}"
+    if [ ! -S "$sock" ]; then
+        echo "MISSING"
+        return 0
+    fi
+    # If lsof shows the socket has a peer that's a live xrdp child = CONNECTED;
+    # else (only chansrv itself listening) = LISTEN.
+    if sudo lsof -U 2>/dev/null | grep -qE "xrdp_chansrv_socket_${display}.*type=STREAM.*CONNECTED"; then
+        echo "CONNECTED"
+    else
+        echo "LISTEN"
+    fi
+}
+
+_list_active_displays() {
+    if [ "${XRDP_WATCHDOG_TEST_LIST_DISPLAYS:-0}" = "1" ]; then
+        echo "${XRDP_WATCHDOG_FAKE_DISPLAYS:-}"
+        return 0
+    fi
+    ls /tmp/.X11-unix/X* 2>/dev/null | sed 's|.*X||' | sort -n
+}
+
+_journalctl_recent_errors() {
+    local since="${1:-1 minute ago}"
+    if [ "${XRDP_WATCHDOG_TEST_JOURNAL:-0}" = "1" ]; then
+        echo "${XRDP_WATCHDOG_FAKE_JOURNAL:-}"
+        return 0
+    fi
+    journalctl -u xrdp -u xrdp-sesman --since "$since" --no-pager 2>/dev/null || true
+}
+
+# --- logging ---
+log() {
+    local level="$1"; shift
+    case "$level" in
+        debug)   [ "$LOG_LEVEL" = "debug" ] || return 0 ;;
+    esac
+    logger -t "$PROG" -p "user.$level" -- "$*"
+    [ -t 1 ] && echo "[$level] $*"
+}
+
+# --- check/fix stubs (filled in by later tasks) ---
+check_a_stale_xrdp_child() { echo "OK"; }
+check_b_chansrv_health()   { echo "OK"; }
+check_c_cliprdr_log_scan() { echo "OK"; }
+
+fix_a_kill_stale() { log info "fix_a: stub"; }
+fix_b_respawn_chansrv() { log info "fix_b: stub"; }
+fix_c_restart_chansrv_notify() { log info "fix_c: stub"; }
+
+# --- CLI ---
+print_help() {
+    cat <<EOF
+$PROG $VERSION — detect/remediate known xrdp reconnect bugs
+
+Usage: $PROG [MODE]
+
+Modes:
+  (no args)    Run one tick (timer-invoked). Detect + remediate.
+  --once       Same as no args (explicit).
+  --check      Dry-run: print findings, exit 0 if all OK, 1 if any BAD.
+  --dry-run    Run a tick but log what each fix would do without executing.
+  --explain    Dump current state (xrdp children, chansrv sockets, displays).
+  --help       Show this help.
+
+Environment:
+  LOG_LEVEL=debug   verbose logging (default: info)
+
+See ~/uap/docs/specs/2026-05-23-xrdp-watchdogs-design.md
+EOF
+}
+
+print_explain() {
+    echo "=== xrdp children ==="
+    _list_xrdp_children
+    echo "=== active X displays ==="
+    _list_active_displays
+    echo "=== chansrv socket states ==="
+    for d in $(_list_active_displays); do
+        printf "  display=%s state=%s\n" "$d" "$(_get_chansrv_socket_state "$d")"
+    done
+    echo "=== recent xrdp journal errors (1m) ==="
+    _journalctl_recent_errors "1 minute ago" | grep -iE 'error|fail|warn' | head -20 || echo "(none)"
+}
+
+run_check_only() {
+    local any_bad=0
+    local r
+    r=$(check_a_stale_xrdp_child); echo "Check A: $r"; [[ "$r" =~ ^BAD ]] && any_bad=1
+    r=$(check_b_chansrv_health);   echo "Check B: $r"; [[ "$r" =~ ^BAD ]] && any_bad=1
+    r=$(check_c_cliprdr_log_scan); echo "Check C: $r"; [[ "$r" =~ ^BAD ]] && any_bad=1
+    return $any_bad
+}
+
+run_tick() {
+    local r
+    r=$(check_a_stale_xrdp_child); [[ "$r" =~ ^BAD ]] && fix_a_kill_stale "$r"
+    r=$(check_b_chansrv_health);   [[ "$r" =~ ^BAD ]] && fix_b_respawn_chansrv "$r"
+    r=$(check_c_cliprdr_log_scan); [[ "$r" =~ ^BAD ]] && fix_c_restart_chansrv_notify "$r"
+    log debug "tick complete"
+}
+
+parse_args() {
+    case "${1:-}" in
+        ""|--once) MODE="tick" ;;
+        --check)   MODE="check" ;;
+        --dry-run) MODE="tick"; DRY_RUN=1 ;;
+        --explain) MODE="explain" ;;
+        -h|--help) MODE="help" ;;
+        *) echo "$PROG: unknown flag: $1" >&2; print_help >&2; exit 2 ;;
+    esac
+}
+
+main() {
+    parse_args "$@"
+    case "$MODE" in
+        help)    print_help ;;
+        explain) print_explain ;;
+        check)   run_check_only ;;
+        tick)    run_tick ;;
+    esac
+}
+
+main "$@"
