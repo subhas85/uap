@@ -64,6 +64,20 @@ apt_install() {
     run_sudo env DEBIAN_FRONTEND=noninteractive apt-get install -y "${missing[@]}"
 }
 
+_resolve_watchdog() {
+    # Resolve install_watchdog="auto" to true/false based on sesman policy.
+    case "$INSTALL_WATCHDOG" in
+        true)  echo "true" ;;
+        false) echo "false" ;;
+        auto)
+            case "$SESMAN_POLICY" in
+                U|UB) echo "true" ;;
+                *)    echo "false" ;;
+            esac ;;
+        *)     echo "false" ;;
+    esac
+}
+
 # Download + install JetBrains Mono Nerd Font (the patched variant) into
 # the operator's ~/.local/share/fonts/. The apt package `fonts-jetbrains-mono`
 # is the regular (non-patched) font; the Nerd Font ships separately on GitHub.
@@ -338,6 +352,13 @@ install_xrdp() {
         log "xrdp: DRY-RUN — would patch /etc/xrdp/sesman.ini Policy to ${SESMAN_POLICY}"
         [ "$TCP_KEEPALIVE" = "true" ] && log "xrdp: DRY-RUN — would ensure tcp_keepalive=true in xrdp.ini [Globals]"
         [ "$INSTALL_RECONNECTWM" = "true" ] && log "xrdp: DRY-RUN — would install /etc/xrdp/reconnectwm.sh"
+        local _wd_dry
+        _wd_dry=$(_resolve_watchdog)
+        if [ "$_wd_dry" = "true" ]; then
+            log "xrdp: DRY-RUN — would install xrdp-watchdog (interval=${WATCHDOG_INTERVAL_SECONDS}s)"
+        else
+            log "xrdp: DRY-RUN — would ensure xrdp-watchdog NOT installed"
+        fi
         if [ -n "$RDP_LCID" ] && [ "$RDP_LCID" != "0x00000409" ]; then
             local lcid_lower="${RDP_LCID#0x}"
             lcid_lower="${lcid_lower,,}"
@@ -409,6 +430,29 @@ install_xrdp() {
     # 7. Fix /etc/xrdp/key.pem perms so xrdp can use TLS.
     if [ -f /etc/xrdp/key.pem ]; then
         run_sudo chmod 644 /etc/xrdp/key.pem
+    fi
+
+    # 8. xrdp-watchdog (idempotent install/uninstall based on identity)
+    local watchdog_state
+    watchdog_state=$(_resolve_watchdog)
+
+    if [ "$watchdog_state" = "true" ]; then
+        run_sudo install -m 755 -o root -g root "$UAP_DIR/os/xrdp/xrdp-watchdog" /usr/local/bin/xrdp-watchdog
+        run_sudo install -m 644 -o root -g root "$render/xrdp-watchdog.service" /etc/systemd/system/xrdp-watchdog.service
+        run_sudo install -m 644 -o root -g root "$render/xrdp-watchdog.timer"   /etc/systemd/system/xrdp-watchdog.timer
+        run_sudo systemctl daemon-reload
+        run_sudo systemctl enable --now xrdp-watchdog.timer >/dev/null 2>&1
+        log "xrdp: xrdp-watchdog installed and enabled (every ${WATCHDOG_INTERVAL_SECONDS}s)"
+    else
+        # Uninstall if previously installed (idempotent)
+        if [ -f /etc/systemd/system/xrdp-watchdog.timer ]; then
+            run_sudo systemctl disable --now xrdp-watchdog.timer >/dev/null 2>&1 || true
+            run_sudo rm -f /etc/systemd/system/xrdp-watchdog.timer \
+                           /etc/systemd/system/xrdp-watchdog.service \
+                           /usr/local/bin/xrdp-watchdog
+            run_sudo systemctl daemon-reload
+            log "xrdp: xrdp-watchdog uninstalled (per identity)"
+        fi
     fi
 
     log "xrdp: service enabled, port 3389 opened, key.pem perms set"
