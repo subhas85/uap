@@ -49,7 +49,8 @@ network:
   rdp_scope: tailscale-only
 
 xrdp:
-  sesman_policy: UBD
+  sesman_policy: Default   # session per <user,bpp>: reattaches from ANY client size (UBD's D=DisplaySize -> new desktop per resolution)
+  max_bpp: 24              # pin color depth (xrdp.ini [Globals]) so the bpp key can't vary -> single desktop from any client (24-bit truecolor; 16 also works)
   install_reconnectwm: true
   install_watchdog: auto                  # true | false | auto (auto = on if policy is U|UB)
   watchdog_interval_seconds: 30

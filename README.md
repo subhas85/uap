@@ -88,6 +88,7 @@ Future work — fully hands-off provisioning from a hypervisor API (e.g., Proxmo
 - System-wide dark mode (Adwaita-dark for GTK apps; Qt apps follow GTK)
 - Custom Plymouth boot splash (UAP logo on Tokyo Night background — visible on hypervisor console / bare-metal display)
 - **Optional Telegram surface:** [Hermes Agent](https://hermes-agent.nousresearch.com/) (Nous Research, MIT) is the recommended way to reach the same assistant from your phone. Hermes runs as a systemd service, shares `~/workspace/CLAUDE.md` and `~/.hermes/SOUL.md` + memories with Claude Code, and is documented as a UAP component at `ai/hermes-agent/`.
+- Optional Microsoft 365 / Teams Phone admin tooling: PowerShell plus the `MicrosoftTeams` module, documented as the `m365-admin-tools` component.
 
 ## Layout of this folder
 
@@ -107,6 +108,7 @@ profiles/                       # pre-canned identity.yaml files (skip the wizar
 os/                             # system chrome — what Ubuntu looks like
   i3/, alacritty/, wezterm/, rofi/, xinitrc/, typora-themes/
   gtk-theme/, plymouth/, xrdp/, workspace-title-daemon/
+  m365-admin-tools/             # PowerShell + Teams Phone admin module
 ai/                             # AI-assistant-facing pieces
   workspace-hub/                # ~/workspace/CLAUDE.md router template (ICM Layer 0)
   desktop-entries/              # rofi launcher + icon for "Claude (workspace)"
@@ -225,6 +227,30 @@ sudo apt update && sudo apt install -y typora
 mkdir -p ~/.local/bin && ln -s /usr/bin/batcat ~/.local/bin/bat
 ```
 
+### Microsoft 365 / Teams Phone admin tools
+
+The `m365-admin-tools` component installs PowerShell from Microsoft's Ubuntu 24.04 apt repository and installs the `MicrosoftTeams` PowerShell module for the operator:
+
+```bash
+~/uap/setup/apply.sh m365-admin-tools
+```
+
+Keep elevated Azure CLI auth isolated from normal auth with a separate profile:
+
+```bash
+AZURE_CONFIG_DIR=~/.azure-elevated az login
+AZURE_CONFIG_DIR=~/.azure-elevated az account show
+```
+
+Teams Phone inspection uses Teams PowerShell:
+
+```powershell
+Connect-MicrosoftTeams
+Get-CsCallQueue
+Get-CsAutoAttendant
+Get-CsOnlineUser -Identity user@domain.com
+```
+
 ## Phase 5 — JetBrainsMono Nerd Font
 
 `fonts-jetbrains-mono` from apt provides the regular font, but the i3 / alacritty / rofi configs reference the **Nerd Font** patched variant. Install it:
@@ -250,13 +276,14 @@ Default xrdp puts you in a Xorg session. UAP wants it to launch i3 on connect, s
    What this does (driven by `identity.xrdp.*` and `identity.locale.rdp_lcid`):
    - Renders `os/xinitrc/xinitrc.tmpl` → `~/.xinitrc` (mode 755) and symlinks `~/.xsession → ~/.xinitrc`. The X session execs i3 from here.
    - If `identity.xrdp.install_reconnectwm: true`, installs `os/xrdp/reconnectwm.sh` to `/etc/xrdp/reconnectwm.sh` (root-owned, 755). Releases stuck modifier keys after RDP KeyboardSync — see Known Issues B.
-   - Sets `Policy=<identity.xrdp.sesman_policy>` in `/etc/xrdp/sesman.ini` (default `UBD`: match by user+bpp+depth, so the same user reconnecting from any client always reattaches).
+   - Sets `Policy=<identity.xrdp.sesman_policy>` in `/etc/xrdp/sesman.ini` (default `Default`: session per `<user, bpp>`, so the same user reattaches from any client size/resolution — the Windows-RDP single-session feel). NOTE: `UBD`'s "D" is **DisplaySize**, not depth — it spawns a *new* desktop per client resolution; don't use it unless you deliberately want per-resolution desktops. Pair `Default` with `max_bpp=24` in `xrdp.ini` to pin the only remaining variable (bpp) so it's effectively keyed on user alone.
+   - Pins `max_bpp=<identity.xrdp.max_bpp>` (default `24`) in `/etc/xrdp/xrdp.ini` `[Globals]` (idempotent), so color depth — the one policy key that can't be disabled — stays constant and `Default` reattaches from any client.
    - If `identity.locale.rdp_lcid` is not `0x00000409` (US English) and `/etc/xrdp/km-<lcid>.ini` is missing, mirrors `/etc/xrdp/km-00000409.ini` to the right filename. Fixes `/`, `?`, `'`, `"` being mis-translated on English-Canada (`0x00001009`), English-UK (`0x00000809`), English-Australia (`0x00000c09`), etc. No xrdp restart needed; the next RDP connection picks it up.
 
 2. Enable and start xrdp:
    ```bash
    sudo systemctl enable --now xrdp
-   sudo systemctl restart xrdp-sesman   # only safe before any user has logged in — picks up the Policy change
+   sudo systemctl restart xrdp-sesman   # picks up the Policy change; safe with users connected — running X sessions live in their own logind scopes (session-cN.scope) and survive the restart
    ```
 
 3. Open the RDP port if a firewall is enabled:
@@ -510,11 +537,11 @@ The xrdp 0.10+ upgrade (with better keymap handling) would also fix the underlyi
 
 ### G. xrdp-sesman creates a new session instead of reattaching after `xrdp.service` restart
 
-Symptom: after `sudo systemctl restart xrdp.service` (e.g. for a config change), the next RDP reconnect lands the user on a fresh `:11` Xorg session instead of reattaching to the `:10` session they had before. The old session keeps running headless, but all its windows are stranded.
+Symptom: reconnecting from a client whose window size (or color depth) differs from the running session lands you on a fresh blank `:11` Xorg desktop instead of reattaching to the `:10` session you had before. The old session keeps running headless, but its windows are stranded. Enough of these stack up and `MaxSessions` jams new logins.
 
-Root cause: the default `Policy=Default` in `sesman.ini` matches sessions by `(user, bpp, depth, ip-addr, connection-state)`. xrdp service restart invalidates the connection-state tracking, so sesman doesn't see a match and creates a new session.
+Root cause: `Policy=UBD` keys a session on `<user, bpp, DisplaySize>` — the "D" is **DisplaySize (initial resolution)**, NOT depth. A differently-sized client can't match the existing session, so sesman allocates a new one. (Per `man 5 sesman.ini`: `Default` = `<user, bpp>`; `UBD` = `<user, bpp, DisplaySize>`. User and BitPerPixel can never be turned off.)
 
-Fix: set `Policy=UBD` in `/etc/xrdp/sesman.ini` and restart sesman. Reconnects then reattach by user+bpp+depth only. `apply.sh xrdp` writes this in-place from `identity.xrdp.sesman_policy` (default `UBD`). See Phase 6.
+Fix: set `Policy=Default` in `/etc/xrdp/sesman.ini` (session per `<user, bpp>` — resolution-independent) and `systemctl restart xrdp-sesman`. Existing X sessions survive the restart (separate logind scopes). For true single-desktop-from-any-client, also pin `max_bpp=24` in `xrdp.ini [Globals]` so bpp can't vary either. `apply.sh xrdp` writes the policy in-place from `identity.xrdp.sesman_policy` (default `Default`). See Phase 6.
 
 Recovery when it happens: any Claude Code sessions in the stranded `:10` are still reachable via the Claude mobile app (because of `remoteControlAtStartup`); other windows are lost unless you can SSH in and find another way to access them.
 

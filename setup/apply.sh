@@ -134,7 +134,7 @@ export ACCENT_HEX URGENT_HEX GREEN_HEX YELLOW_HEX PURPLE_HEX CYAN_HEX
 export BORDER_HEX INACTIVE_HEX
 export MOD_KEY WORKSPACE_COUNT GTK_THEME
 export WORKSPACE_HUB_NAME PERMISSION_MODE
-export RDP_LCID SESMAN_POLICY INSTALL_RECONNECTWM INSTALL_WATCHDOG WATCHDOG_INTERVAL_SECONDS WATCHDOG_CLIPBOARD_ACTIVE_PROBE TCP_KEEPALIVE
+export RDP_LCID SESMAN_POLICY INSTALL_RECONNECTWM INSTALL_WATCHDOG WATCHDOG_INTERVAL_SECONDS WATCHDOG_CLIPBOARD_ACTIVE_PROBE TCP_KEEPALIVE MAX_BPP
 export SUBWORKSPACES_BLOCK
 
 OS_NAME=$(yq         '.os.name'              "$IDENTITY")
@@ -180,6 +180,7 @@ INSTALL_WATCHDOG=$(yq          '.xrdp.install_watchdog // "auto"'         "$IDEN
 WATCHDOG_INTERVAL_SECONDS=$(yq '.xrdp.watchdog_interval_seconds // 30'    "$IDENTITY")
 WATCHDOG_CLIPBOARD_ACTIVE_PROBE=$(yq '.xrdp.watchdog_clipboard_active_probe // false' "$IDENTITY")
 TCP_KEEPALIVE=$(yq             '.xrdp.tcp_keepalive // true'              "$IDENTITY")
+MAX_BPP=$(yq                   '.xrdp.max_bpp // 24'                      "$IDENTITY")
 
 # Generate the subworkspace markdown block from identity.ai.subworkspaces[]
 SUBWORKSPACES_BLOCK=$(
@@ -351,6 +352,7 @@ install_xrdp() {
         log "xrdp: DRY-RUN — would apt install xrdp xorgxrdp"
         log "xrdp: DRY-RUN — would patch /etc/xrdp/sesman.ini Policy to ${SESMAN_POLICY}"
         [ "$TCP_KEEPALIVE" = "true" ] && log "xrdp: DRY-RUN — would ensure tcp_keepalive=true in xrdp.ini [Globals]"
+        [ -n "$MAX_BPP" ] && log "xrdp: DRY-RUN — would set max_bpp=${MAX_BPP} in xrdp.ini [Globals]"
         [ "$INSTALL_RECONNECTWM" = "true" ] && log "xrdp: DRY-RUN — would install /etc/xrdp/reconnectwm.sh"
         local _wd_dry
         _wd_dry=$(_resolve_watchdog)
@@ -398,6 +400,23 @@ install_xrdp() {
             log "xrdp: xrdp.ini tcp_keepalive=true patched"
         else
             log "xrdp: xrdp.ini tcp_keepalive already true"
+        fi
+    fi
+
+    # 2c. Patch /etc/xrdp/xrdp.ini [Globals] max_bpp (idempotent) — pins color
+    #     depth so Policy=Default reattaches regardless of client. The bpp key
+    #     can never be turned off in sesman's policy, so we hold it constant.
+    if [ -n "$MAX_BPP" ] && [ -f /etc/xrdp/xrdp.ini ]; then
+        if ! grep -qE "^max_bpp=${MAX_BPP}$" /etc/xrdp/xrdp.ini; then
+            if grep -qE '^max_bpp=' /etc/xrdp/xrdp.ini; then
+                run_sudo sed -i "s/^max_bpp=.*/max_bpp=${MAX_BPP}/" /etc/xrdp/xrdp.ini
+            else
+                # Insert after [Globals] header (first line matching exactly that)
+                run_sudo sed -i "/^\[Globals\]\$/a max_bpp=${MAX_BPP}" /etc/xrdp/xrdp.ini
+            fi
+            log "xrdp: xrdp.ini max_bpp set to ${MAX_BPP}"
+        else
+            log "xrdp: xrdp.ini max_bpp already ${MAX_BPP}"
         fi
     fi
 
@@ -652,6 +671,32 @@ install_plymouth() {
 
     run_sudo update-initramfs -u >/dev/null
     log "plymouth: installed theme '$theme' and regenerated initramfs"
+}
+
+install_m365_admin_tools() {
+    if [ "$DRY_RUN" = 1 ]; then
+        log "m365-admin-tools: DRY-RUN — would install Microsoft packages repo, PowerShell, MicrosoftTeams + Microsoft.Graph.Teams modules, and librsvg2-bin"
+        return 0
+    fi
+
+    if ! dpkg -s packages-microsoft-prod >/dev/null 2>&1; then
+        log "m365-admin-tools: setting up Microsoft Ubuntu 24.04 packages repo"
+        local tmpdir
+        tmpdir=$(mktemp -d)
+        curl -fsSL -o "$tmpdir/packages-microsoft-prod.deb" \
+            https://packages.microsoft.com/config/ubuntu/24.04/packages-microsoft-prod.deb
+        run_sudo dpkg -i "$tmpdir/packages-microsoft-prod.deb"
+        rm -rf "$tmpdir"
+        APT_UPDATED=0
+    fi
+
+    apt_install powershell librsvg2-bin
+
+    log "m365-admin-tools: installing/updating MicrosoftTeams + Microsoft.Graph.Teams PowerShell modules for ${USERNAME}"
+    pwsh -NoLogo -NoProfile -Command \
+        'Set-PSRepository -Name PSGallery -InstallationPolicy Trusted; Install-Module MicrosoftTeams -Scope CurrentUser -Force -AllowClobber -Repository PSGallery; Install-Module Microsoft.Graph.Teams -Scope CurrentUser -Force -AllowClobber -Repository PSGallery' >/dev/null
+
+    log "m365-admin-tools: installed pwsh + MicrosoftTeams + Microsoft.Graph.Teams + librsvg2-bin"
 }
 
 # --- install_apps: operator-facing apps from identity.apps.* --------------
