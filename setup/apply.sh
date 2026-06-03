@@ -367,6 +367,7 @@ install_xrdp() {
             log "xrdp: DRY-RUN — would mirror /etc/xrdp/km-00000409.ini to km-${lcid_lower}.ini"
         fi
         log "xrdp: DRY-RUN — would systemctl enable --now xrdp, ufw allow 3389/tcp, chmod 644 /etc/xrdp/key.pem"
+        [ -d /etc/needrestart ] && log "xrdp: DRY-RUN — would install needrestart drop-in (xrdp excluded from auto-restart)"
         return 0
     fi
 
@@ -449,6 +450,15 @@ install_xrdp() {
     # 7. Fix /etc/xrdp/key.pem perms so xrdp can use TLS.
     if [ -f /etc/xrdp/key.pem ]; then
         run_sudo chmod 644 /etc/xrdp/key.pem
+    fi
+
+    # 7b. needrestart: never auto-restart xrdp on library upgrades. A sesman
+    #     restart wipes its in-memory session registry and orphans the live RDP
+    #     desktop (reconnect lands on a blank NEW session). Libs still patch;
+    #     operator restarts xrdp manually when ready.
+    if [ -d /etc/needrestart ] && [ -f "$UAP_DIR/os/needrestart/xrdp-no-autorestart.conf" ]; then
+        run_sudo install -m 644 -o root -g root "$UAP_DIR/os/needrestart/xrdp-no-autorestart.conf" /etc/needrestart/conf.d/xrdp-no-autorestart.conf
+        log "xrdp: installed needrestart drop-in (xrdp excluded from auto-restart)"
     fi
 
     # 8. xrdp-watchdog (idempotent install/uninstall based on identity)
