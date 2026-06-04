@@ -489,6 +489,7 @@ From a remote machine on the same Tailnet, RDP to this VM (`mstsc`, Remmina, etc
 - `Mod1+Shift+Return` opens firefox
 - `Print` or `Mod1+Shift+s` opens flameshot
 - `Mod1+1`..`9`,`0` switches workspaces; `Mod1+Shift+...` moves windows
+- `Mod1+u` grows the active tiled window to ~75% in whichever split direction has a neighbor (one-shot resize; stays tiled)
 
 If the bar is empty or the title doesn't update on focus change, check `~/.local/bin/i3-workspace-title` is running and that `i3 --get-socketpath` returns a path.
 
