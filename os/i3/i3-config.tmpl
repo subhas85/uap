@@ -13,18 +13,24 @@ set $cyan     ${CYAN_HEX}
 set $border   ${BORDER_HEX}
 set $inactive ${INACTIVE_HEX}
 
-client.focused           $accent    $accent    $bg     $green     $accent
-client.focused_inactive  $border    $bg        $fg     $border    $border
-client.unfocused         $border    $bg        $inactive $border  $border
+client.focused           $purple    $purple    $bg     $green     $purple
+client.focused_inactive  $bg        $bg        $fg     $bg        $bg
+client.unfocused         $bg        $bg        $inactive $bg      $bg
 client.urgent            $urgent    $urgent    $bg     $urgent    $urgent
 client.placeholder       $bg        $bg        $fg     $bg        $bg
 client.background        $bg
 
 gaps inner 8
 gaps outer 4
-default_border pixel 2
-default_floating_border pixel 2
+default_border pixel 3
+default_floating_border pixel 3
 hide_edge_borders smart
+
+# Terminals (Alacritty, WezTerm) set the Motif "no decorations" hint, which modern
+# i3 honors as border=none — that leaves no border surface for the focused-window
+# highlight to paint. Force a real pixel border so the active-window accent shows.
+for_window [class="Alacritty"] border pixel 3
+for_window [class="org.wezfurlong.wezterm"] border pixel 3
 
 bindsym $mod+Return exec --no-startup-id alacritty
 bindsym $mod+d exec rofi -show drun -show-icons -theme ${HOME_DIR}/.config/rofi/tokyo-night.rasi
@@ -58,6 +64,9 @@ bindsym $mod+Shift+Right move right
 
 bindsym $mod+b splith
 bindsym $mod+v splitv
+# Flatten clipboard: collapse a wrapped/multi-line command into one clean line
+# (copy with Ctrl+Shift+C -> Ctrl+Shift+X -> paste with Ctrl+Shift+V)
+bindsym Control+Shift+x exec --no-startup-id ${HOME_DIR}/.local/bin/clip-flatten
 bindsym $mod+s layout stacking
 bindsym $mod+w layout tabbed
 bindsym $mod+e layout toggle split

@@ -431,6 +431,21 @@ Recovery when it happens: any Claude Code sessions in the stranded `:10` are sti
 
 On Proxmox, set the VM's memory ballooning *off* if you allocate a specific RAM size. With ballooning on, the displayed "memory" metric is the balloon size, which makes monitoring confusing and can squeeze the VM under host pressure.
 
+### I. Focused-window border doesn't show on Alacritty / WezTerm
+
+Symptom: the `client.focused` highlight (the colored border on the active window) paints correctly on browsers, Thunar, etc., but **not** on Alacritty or WezTerm — those windows show no border even when focused.
+
+Root cause: both terminals request no decorations (Alacritty's `decorations = "none"`, WezTerm similarly), which sets the Motif `_MOTIF_WM_HINTS` "no decorations" flag. Modern i3 honors that hint by giving the window `border none` — so there is no border surface for the focus color to paint. Confirm with `i3-msg -t get_tree | grep -i border` (focused terminal shows `"border": "none"`).
+
+Fix (baked into the rendered i3 config): force a real pixel border on those classes so the highlight has something to draw on —
+
+```
+for_window [class="Alacritty"] border pixel 3
+for_window [class="org.wezfurlong.wezterm"] border pixel 3
+```
+
+`for_window` only fires on window *creation*, so it covers every terminal opened after the config loads (including all windows after a relogin). To fix terminals already open without relaunching: `i3-msg '[class="Alacritty"] border pixel 3'`.
+
 ---
 
 ## Known issues — RDP reconnect bugs (auto-fixed by watchdog)
