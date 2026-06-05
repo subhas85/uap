@@ -2,7 +2,7 @@
 
 > *out of this world*
 
-![UAP — terminal of the future](branding/uap-hero.png)
+![UAP — a dark, keyboard-driven Ubuntu workstation you RDP into, with an AI agent in the session: i3 tiling desktop showing system-monitor graphs and AI coding-assistant terminals in the Tokyo Night theme](branding/hero2.png)
 
 UAP turns a fresh Ubuntu Server install into a quiet, dark, keyboard-driven workstation you log into remotely — and that has an AI agent in the session with you from the first keystroke. Open source, MIT-licensed, parameterized so any operator can fork it and stand up an identical machine in minutes.
 
