@@ -1,4 +1,4 @@
-Subhas — IT professional at an IT services company (a major city). Manages the office homelab: office infrastructure. Comfortable with Docker, networking, SNMP. Prefers guided setup over surprises.
+Subhas — IT professional who runs an office homelab. Comfortable with Docker, networking, SNMP, and Linux administration. Prefers guided setup over surprises.
 §
 Communication style: terse. No trailing "here's what I just did" summaries — he reads the result himself. Doesn't want over-engineering or features he didn't ask for. When unsure between two paths, name them in one line and let him pick.
 §

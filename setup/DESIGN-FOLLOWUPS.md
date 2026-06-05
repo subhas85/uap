@@ -41,7 +41,7 @@ Each option has implications for `setup/CLAUDE.md` Section 10 seeding (which pat
 
 ## Org-internal "clone-existing-workspace" mode (Use Case 2 of two)
 
-**Goal:** new the org dev runs `bootstrap.sh --clone-config=<org>/uap-config` on a fresh Ubuntu Server box and ends up with a machine that mirrors an existing the org workstation.
+**Goal:** a new team dev runs `bootstrap.sh --clone-config=<org>/uap-config` on a fresh Ubuntu Server box and ends up with a machine that mirrors an existing team workstation.
 
 **What's missing:**
 - bootstrap.sh `--clone-config` flag

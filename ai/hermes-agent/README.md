@@ -20,7 +20,7 @@ This folder is the UAP runbook entry: how Hermes is installed on UAP, what files
 | `SOUL.md` | Hermes identity + universal rules | `~/.hermes/SOUL.md` |
 | `USER.md` | Bounded operator profile (≤1,375 chars) | `~/.hermes/memories/USER.md` |
 | `MEMORY.md` | Bounded environment facts (≤2,200 chars) | `~/.hermes/memories/MEMORY.md` |
-| `systemd-uap-override.conf` | Drop-in setting `WorkingDirectory=/home/<user>/workspace` | `/etc/systemd/system/hermes-gateway.service.d/uap-override.conf` |
+| `systemd-uap-override.conf.tmpl` | Drop-in setting `WorkingDirectory=${HOME_DIR}/workspace` (rendered per-operator) | `/etc/systemd/system/hermes-gateway.service.d/uap-override.conf` |
 
 ## Install (manual, no apply.sh integration yet)
 
@@ -45,8 +45,11 @@ install -m 0644 MEMORY.md ~/.hermes/memories/MEMORY.md
 sudo hermes gateway install --system
 sudo hermes gateway start --system
 
-# 5. Apply the UAP drop-in so the gateway runs from ~/workspace/
-sudo install -m 0644 -D systemd-uap-override.conf \
+# 5. Apply the UAP drop-in so the gateway runs from ~/workspace/.
+#    Render the template first (HOME_DIR=/home/<your-username>):
+HOME_DIR="$HOME" envsubst '${HOME_DIR}' < systemd-uap-override.conf.tmpl \
+    > /tmp/uap-override.conf
+sudo install -m 0644 -D /tmp/uap-override.conf \
     /etc/systemd/system/hermes-gateway.service.d/uap-override.conf
 sudo systemctl daemon-reload
 sudo systemctl restart hermes-gateway
