@@ -22,6 +22,24 @@ UAP turns a fresh Ubuntu Server install into a quiet, dark, keyboard-driven work
 
 Working today. PRs and issues welcome. See [`setup/DESIGN.md`](setup/DESIGN.md) for architecture, [`CONTRIBUTING.md`](CONTRIBUTING.md) to contribute.
 
+## How UAP is meant to be used
+
+UAP is an **always-on machine you reach remotely** — not a daily-driver laptop OS. Run it in a VM or on a dedicated box that stays powered on, put Ubuntu Server on it, and RDP/SSH in from whatever you're holding. Installing it on bare-metal hardware you carry around defeats the point: the whole model assumes the box is sitting somewhere reliable while you come and go.
+
+It's also **deliberately minimal**. There's no app dock or hand-holding — i3 is keyboard-driven, and you learn the shortcuts to drive it. That's the trade: a few hours of muscle memory buys a machine that then gets out of your way.
+
+**Claude Code is the main driver.** You don't open an editor and *then* maybe ask an AI for help — you start a Claude session and work through it: kicking off sessions, doing the serious work, steering from the terminal. Sessions autostart with remote control on, so you can pick up exactly where you left off after a disconnect, and monitor or redirect a long-running task from your phone as you step away from the machine.
+
+**Hermes is your second surface and second agent.** It's the same assistant reached over a chat app — configurable for Telegram, Microsoft Teams, Discord, or wherever your team already lives. In day-to-day use it's mostly for launching a fresh terminal, diagnosing the machine, or just having a lightweight second agent on the system for an extra pair of hands while the main session is busy.
+
+**Other ways people run it:**
+
+- **A homelab / infrastructure command center** — an always-reachable box that already knows your environment, for running diagnostics, restarting services, and poking at the network.
+- **A long-task runner** — kick off a build, migration, or research run, walk away, and watch or redirect it from your phone.
+- **On-call / incident triage** — Hermes on Teams or Discord as the front door: pull logs, check service health, or open a terminal the moment an alert lands.
+- **A shared, persistent workspace** — runbooks, notes, and project context that both Claude Code and Hermes read, so nothing has to be re-explained between sessions or across surfaces.
+- **Scheduled agent routines** — recurring overnight jobs (reports, housekeeping, health checks) that only make sense on a machine that's always up.
+
 ## Quick Start
 
 You have a fresh **Ubuntu Server 24.04 LTS** install (VM or bare metal) reachable over SSH or local console. UAP turns it into your AI-collaborator workstation.
@@ -138,4 +156,8 @@ The quick start above is the fast path. If you want to understand or run the ins
 - Architecture & the `identity.yaml` schema → [`setup/DESIGN.md`](setup/DESIGN.md)
 - Contributing → [`CONTRIBUTING.md`](CONTRIBUTING.md)
 - ICM (the optional folder-as-workflow methodology) & upstream docs → [`setup/references.md`](setup/references.md)
+
+## The name
+
+"UAP" — and the UFO motif running through the branding — is a nod to Eddy Fasthouse.
 
