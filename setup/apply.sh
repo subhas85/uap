@@ -279,12 +279,17 @@ install_i3() {
         return 0
     fi
 
-    apt_install i3 i3-wm i3status i3lock xdotool fonts-jetbrains-mono
+    apt_install i3 i3-wm i3status i3lock xdotool xclip fonts-jetbrains-mono
     install_jetbrains_nerd_font
 
     install -d "$target"
     install -m 644 "$render/i3-config"      "$target/config"
     install -m 644 "$render/i3status.conf"  "$target/i3status.conf"
+
+    # clip-flatten: Ctrl+Shift+X collapses a wrapped/multi-line command in the
+    # clipboard to one clean line (needs xclip; binding lives in i3-config)
+    install -d "$HOME_DIR/.local/bin"
+    install -m 755 "$render/clip-flatten"   "$HOME_DIR/.local/bin/clip-flatten"
 
     # Live reload (safe — preserves session/windows)
     DISPLAY="${DISPLAY:-:10}" i3-msg reload >/dev/null 2>&1 || true

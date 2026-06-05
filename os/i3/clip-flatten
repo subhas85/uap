@@ -1,0 +1,16 @@
+#!/usr/bin/env bash
+# clip-flatten — collapse a multi-line/wrapped command in the clipboard into one
+# clean line so it pastes & runs cleanly. Handles: visual wraps, leading
+# indentation from code blocks, shell backslash-continuations, and stray
+# CRs (^M) introduced by the xrdp clipboard channel.
+#
+# Use for ONE command that got split across lines. For several distinct
+# command lines, paste normally (bracketed paste holds them until Enter).
+#
+# Bound to Ctrl+Shift+X in i3. Workflow: copy -> Ctrl+Shift+X -> paste.
+xclip -o -selection clipboard 2>/dev/null \
+  | sed -z 's/\\\n/ /g' \
+  | tr '\r\n\t' '   ' \
+  | tr -s ' ' \
+  | sed 's/^ *//; s/ *$//' \
+  | xclip -i -selection clipboard
