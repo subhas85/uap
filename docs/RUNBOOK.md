@@ -164,7 +164,7 @@ Default xrdp puts you in a Xorg session. UAP wants it to launch i3 on connect, s
 2. Enable and start xrdp:
    ```bash
    sudo systemctl enable --now xrdp
-   sudo systemctl restart xrdp-sesman   # picks up the Policy change; safe with users connected — running X sessions live in their own logind scopes (session-cN.scope) and survive the restart
+   sudo systemctl restart xrdp-sesman   # picks up the Policy change. A LIVE connection keeps working (its X session lives in its own logind scope, session-cN.scope), BUT the new master loses track of that scope — on the user's next disconnect+reconnect they get a fresh desktop, not their old one, and the old scope orphans. Restart only when no desktop needs to survive a later reconnect. Same mechanism that makes unattended-upgrades drop sessions — see "needrestart drops RDP sessions" in Known issues.
    ```
 
 3. Open the RDP port if a firewall is enabled:
@@ -485,6 +485,36 @@ Set `install_watchdog: false` in `~/uap.local/identity.yaml` and rerun `~/uap/se
 ### Design rationale
 
 See `docs/specs/2026-05-23-xrdp-watchdogs-design.md`.
+
+---
+
+## Known issue — daily unattended-upgrades drop RDP sessions (X-server / xrdp-stack upgrades)
+
+**Symptom:** every morning (or after any auto-upgrade) you reconnect to a **fresh blank desktop** instead of your previous one, and stale `Xorg :N` desktops pile up — one per upgrade day — each holding ~70–120 MB.
+
+**Mechanism:** an RDP desktop is a logind session scope (`session-cN.scope`) running its own `Xorg :N` + i3, owned by a per-session `xrdp-sesman` fork. It lives *outside* `xrdp-sesman.service`'s cgroup. When `apt-daily-upgrade` (unattended-upgrades) restarts the xrdp stack mid-session:
+- the running desktop survives (different cgroup), but the *new* sesman master has no record of it;
+- your next reconnect builds a brand-new desktop → you "lose" your session, and the old scope is orphaned forever (`KillDisconnected` defaults off) → leak.
+
+**ROOT CAUSE (verified 2026-06-26 on `adminbox`) — a dead needrestart regex.** `needrestart` matches `$nrconf{override_rc}` against the **bare unit name** (`xrdp`, `xrdp-sesman`) with **no `.service` suffix** — confirmed by `needrestart -r l -b` printing `NEEDRESTART-SVC: xrdp`, and by the needrestart source appending `.service` only when it *builds* the `systemctl restart` command (so `$rc` is bare at match time). The xrdp override drop-ins (`os/needrestart/xrdp-no-autorestart.conf` and the distro `99-xrdp.conf`) were written with a `\.service$`-anchored regex (`qr(^xrdp\.service$)`) which **never matches the bare name** → the override was **silently dead from May–Jun 2026**, and every library upgrade kept restarting xrdp. Caught red-handed 2026-06-26: a routine `kpartx`/`chrome` upgrade ran `Restarting services... systemctl restart containerd.service xrdp.service`. (The distro's own excludes correctly use bare prefixes — `qr(^dbus)`, `qr(^gdm)` — which is why *they* work.)
+
+**Fix (primary):** use a bare-name regex. `os/needrestart/xrdp-no-autorestart.conf` now ships:
+```perl
+$nrconf{override_rc}->{qr(^xrdp(-sesman)?(\.service)?$)} = 0;
+```
+Verify the real decision (NOT `-r l -b`, which lists pre-override and is misleading) by replaying needrestart's match loop against the loaded config — `xrdp` and `xrdp-sesman` must resolve to SKIP. With this, library upgrades (openssl, even an `xserver-xorg-core` lib bump) no longer restart the stack.
+
+**Fix (secondary, defense-in-depth):** also keep the X-server / xrdp **packages** out of automatic upgrades, so they're never swapped on disk under a live session and any package-postinst restart (which bypasses needrestart) can't fire. `/etc/apt/apt.conf.d/52-uap-unattended-holds` (mirrored at `os/apt/52-uap-unattended-holds`):
+```
+Unattended-Upgrade::Package-Blacklist {
+    "xserver-xorg-core"; "xserver-common"; "xserver-xorg-legacy"; "xorgxrdp"; "xrdp";
+};
+```
+Trade-off: those packages won't auto-security-patch — apply them yourself at a reboot: `sudo apt update && sudo apt install xserver-xorg-core xorgxrdp xrdp && sudo reboot`. Drop this file if you'd rather rely on the needrestart override alone.
+
+**Confirm the symptom history:** `grep -E 'xserver-xorg|xrdp|xorgxrdp' /var/log/apt/history.log`; `journalctl -u xrdp -u xrdp-sesman | grep -E 'Stopping|Started'` lines inside an `apt-daily-upgrade` window; multiple `Xorg :NN` in `ps -ef | grep Xorg`, each a `session-cN.scope` via `loginctl show-session <cN> -p Display`.
+
+**Clean up existing orphans:** `loginctl terminate-session <cN>` for each stale scope (list with `loginctl list-sessions`, map to display via `loginctl show-session <cN> -p Display`). Leave your current one.
 
 ---
 

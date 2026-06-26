@@ -373,6 +373,7 @@ install_xrdp() {
         fi
         log "xrdp: DRY-RUN — would systemctl enable --now xrdp, ufw allow 3389/tcp, chmod 644 /etc/xrdp/key.pem"
         [ -d /etc/needrestart ] && log "xrdp: DRY-RUN — would install needrestart drop-in (xrdp excluded from auto-restart)"
+        [ -d /etc/apt/apt.conf.d ] && log "xrdp: DRY-RUN — would install apt drop-in (X/xrdp stack excluded from unattended-upgrades)"
         return 0
     fi
 
@@ -464,6 +465,16 @@ install_xrdp() {
     if [ -d /etc/needrestart ] && [ -f "$UAP_DIR/os/needrestart/xrdp-no-autorestart.conf" ]; then
         run_sudo install -m 644 -o root -g root "$UAP_DIR/os/needrestart/xrdp-no-autorestart.conf" /etc/needrestart/conf.d/xrdp-no-autorestart.conf
         log "xrdp: installed needrestart drop-in (xrdp excluded from auto-restart)"
+    fi
+
+    # 7c. apt: keep the X server + xrdp stack out of unattended-upgrades. Swapping
+    #     xserver-xorg-core / xrdp under a LIVE session restarts the stack and
+    #     orphans the running desktop (reconnect lands on a blank NEW session) —
+    #     and this path bypasses the needrestart override (it's a package upgrade,
+    #     not a lib-change restart). Apply these manually at a reboot instead.
+    if [ -d /etc/apt/apt.conf.d ] && [ -f "$UAP_DIR/os/apt/52-uap-unattended-holds" ]; then
+        run_sudo install -m 644 -o root -g root "$UAP_DIR/os/apt/52-uap-unattended-holds" /etc/apt/apt.conf.d/52-uap-unattended-holds
+        log "xrdp: installed apt drop-in (X/xrdp stack excluded from unattended-upgrades)"
     fi
 
     # 8. xrdp-watchdog (idempotent install/uninstall based on identity)

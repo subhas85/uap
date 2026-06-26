@@ -1,0 +1,17 @@
+// UAP — keep the X server and xrdp stack out of automatic (unattended) upgrades.
+//
+// An RDP desktop is an Xorg process in a logind scope (session-cN.scope). If
+// unattended-upgrades swaps xserver-xorg-core / xrdp under a LIVE session, the
+// stack is restarted, the running desktop is orphaned, and the next reconnect
+// builds a fresh blank desktop (you "lose" your session; orphans pile up).
+//
+// These packages can't be live-swapped under a session — apply them yourself at
+// a reboot:  sudo apt update && sudo apt install xserver-xorg-core xorgxrdp xrdp && sudo reboot
+// Everything else still auto-patches normally.
+Unattended-Upgrade::Package-Blacklist {
+    "xserver-xorg-core";
+    "xserver-common";
+    "xserver-xorg-legacy";
+    "xorgxrdp";
+    "xrdp";
+};
