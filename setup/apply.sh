@@ -327,14 +327,23 @@ install_desktop_entries() {
     local render="$RENDER_DIR/desktop-entries"
 
     if [ "$DRY_RUN" = 1 ]; then
-        log "desktop-entries: DRY-RUN — would install claude-workspace.desktop + claude.png under $HOME_DIR/.local/share/{applications,icons/claude}/ and pre-seed rofi drun cache"
+        log "desktop-entries: DRY-RUN — would install claude-workspace.desktop, herdr-workspace.desktop + claude.png under $HOME_DIR/.local/share/{applications,icons/claude}/ and pre-seed rofi drun cache"
         return 0
     fi
 
     install -d "$HOME_DIR/.local/share/applications" "$HOME_DIR/.local/share/icons/claude"
 
+    # The Herdr launcher is a first-class UAP entry. Keep it from rendering a
+    # dead Alt+d item on fresh installs where the separate herdr component has
+    # not been run explicitly.
+    if ! command -v herdr >/dev/null 2>&1; then
+        install_herdr
+    fi
+
     install -m 644 "$render/claude-workspace.desktop" \
         "$HOME_DIR/.local/share/applications/claude-workspace.desktop"
+    install -m 644 "$render/herdr-workspace.desktop" \
+        "$HOME_DIR/.local/share/applications/herdr-workspace.desktop"
     install -m 644 "$render/claude.png" \
         "$HOME_DIR/.local/share/icons/claude/claude.png"
 
@@ -346,8 +355,27 @@ install_desktop_entries() {
         echo "20 claude-workspace.desktop" | cat - "$cache" > "$cache.new" && mv "$cache.new" "$cache"
         log "desktop-entries: pre-seeded rofi cache"
     fi
+    if [ -f "$cache" ] && ! grep -q 'herdr-workspace.desktop' "$cache"; then
+        echo "25 herdr-workspace.desktop" | cat - "$cache" > "$cache.new" && mv "$cache.new" "$cache"
+        log "desktop-entries: pre-seeded rofi cache for Herdr"
+    fi
 
-    log "desktop-entries: installed Claude launcher + icon"
+    log "desktop-entries: installed Claude + Herdr launchers"
+}
+
+install_herdr() {
+    if [ "$DRY_RUN" = 1 ]; then
+        log "herdr: DRY-RUN — would install/update ~/.local/bin/herdr from https://herdr.dev/install.sh if missing"
+        return 0
+    fi
+
+    install -d "$HOME_DIR/.local/bin"
+    if command -v herdr >/dev/null 2>&1; then
+        log "herdr: already installed at $(command -v herdr) ($(herdr --version 2>/dev/null || true))"
+    else
+        log "herdr: installing latest stable release from upstream manifest"
+        HERDR_INSTALL_DIR="$HOME_DIR/.local/bin" sh -c 'curl -fsSL https://herdr.dev/install.sh | sh'
+    fi
 }
 
 install_xrdp() {

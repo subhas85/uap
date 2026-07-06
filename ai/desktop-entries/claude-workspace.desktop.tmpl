@@ -1,11 +1,11 @@
 [Desktop Entry]
 Type=Application
-Name=Claude (${WORKSPACE_HUB_NAME})
+Name=Claude Code (new session)
 GenericName=Claude Code
-Comment=Open Claude Code in ~/${WORKSPACE_HUB_NAME} with ${PERMISSION_MODE} + remote-control
-Exec=alacritty --working-directory ${HOME_DIR}/${WORKSPACE_HUB_NAME} -e claude --permission-mode=${PERMISSION_MODE}
+Comment=Start a new Claude Code session in ~/${WORKSPACE_HUB_NAME} with ${PERMISSION_MODE} + remote-control
+Exec=alacritty --working-directory ${HOME_DIR}/${WORKSPACE_HUB_NAME} -e claude --permission-mode=${PERMISSION_MODE} --remote-control
 Icon=${HOME_DIR}/.local/share/icons/claude/claude.png
 Terminal=false
-Categories=Development;Utility;
-Keywords=claude;ai;agent;cli;
+Categories=Development;
+Keywords=claude;claude code;ai;agent;cli;new session;workspace;
 StartupNotify=false

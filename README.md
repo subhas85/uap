@@ -10,8 +10,10 @@ UAP turns a fresh Ubuntu Server install into a quiet, dark, keyboard-driven work
 
 - Ubuntu Server 24.04 LTS + i3 + xrdp (you RDP in from your laptop or phone, you don't sit at the box)
 - Tokyo Night theme across the whole stack (i3 bar, WezTerm, alacritty, rofi, Typora, GTK apps, the boot splash)
-- Claude Code installed and auto-starting in a `~/workspace/` hub, with four built-in permission tiers (`personal-lab`, `engineer`, `staff`, `production-admin`)
-- Optional second surface for the same assistant on Telegram via [Hermes Agent](https://hermes-agent.nousresearch.com/) (recommended), sharing the workspace-hub knowledge layer with Claude Code so you can jump between terminal and phone without re-explaining context
+- [Herdr](https://herdr.dev/) as the main terminal/agent window: a persistent tmux-like workspace you can reach from RDP, SSH, or the physical/adminbox screen, with an Alt+d launcher entry for the shared session
+- Claude Code installed and auto-starting in a `~/workspace/` hub, with an Alt+d launcher entry for a fresh Claude Code session and four built-in permission tiers (`personal-lab`, `engineer`, `staff`, `production-admin`)
+- Optional second surface for the same assistant on Telegram via [Hermes Agent](https://hermes-agent.nousresearch.com/) (recommended), sharing the workspace-hub knowledge layer with Claude Code and Herdr so you can jump between terminal and phone without re-explaining context
+- Optional Agent Reach layer for read/search access to webpages, YouTube transcripts, GitHub, RSS/Atom, Exa, V2EX, and basic Bilibili — with cookie-backed social channels kept off by default
 - The toolchain a dev needs out of the box: Edge, Chrome, btop, bat, glow, Typora, git, build essentials
 
 **What's different about it:**
@@ -28,9 +30,11 @@ UAP is an **always-on machine you reach remotely** — not a daily-driver laptop
 
 It's also **deliberately minimal**. There's no app dock or hand-holding — i3 is keyboard-driven, and you learn the shortcuts to drive it. That's the trade: a few hours of muscle memory buys a machine that then gets out of your way.
 
+**Herdr is the main terminal surface.** UAP treats Herdr as the persistent window into terminals and agents: one Herdr session can be viewed over RDP, from an SSH terminal, or at the adminbox itself, and panes keep running while clients disconnect. Launch it from Alt+d as **Herdr (terminal workspace)**; it attaches in `~/workspace/` so fresh panes inherit the same shared context.
+
 **Claude Code is the main driver.** You don't open an editor and *then* maybe ask an AI for help — you start a Claude session and work through it: kicking off sessions, doing the serious work, steering from the terminal. Sessions autostart with remote control on, so you can pick up exactly where you left off after a disconnect, and monitor or redirect a long-running task from your phone as you step away from the machine.
 
-**Hermes is your second surface and second agent.** It's the same assistant reached over a chat app — configurable for Telegram, Microsoft Teams, Discord, or wherever your team already lives. In day-to-day use it's mostly for launching a fresh terminal, diagnosing the machine, or just having a lightweight second agent on the system for an extra pair of hands while the main session is busy.
+**Hermes is your second surface and second agent.** It's the same assistant reached over a chat app — configurable for Telegram, Microsoft Teams, Discord, or wherever your team already lives. In day-to-day use it's mostly for checking Herdr/agent status, launching a fresh terminal, diagnosing the machine, or just having a lightweight second agent on the system for an extra pair of hands while the main session is busy.
 
 **Other ways people run it:**
 
@@ -98,6 +102,7 @@ Future work — fully hands-off provisioning from a hypervisor API (e.g., Proxmo
 - Ubuntu Server 24.04 LTS as the base
 - xrdp + xorgxrdp for RDP access (Tailscale-friendly)
 - i3 window manager (Tokyo Night theme, JetBrainsMono Nerd Font)
+- [Herdr](https://herdr.dev/) terminal workspace manager: persistent panes/agents across RDP and SSH, with an Alt+d launcher entry for `Herdr (terminal workspace)`
 - WezTerm + Alacritty terminals, rofi launcher, flameshot screenshots, feh wallpaper, thunar file manager
 - Browsers: Microsoft Edge, Google Chrome, Chromium (snap), Firefox (snap)
 - Markdown editor: Typora (with Tokyo Night theme installed)
@@ -106,6 +111,7 @@ Future work — fully hands-off provisioning from a hypervisor API (e.g., Proxmo
 - System-wide dark mode (Adwaita-dark for GTK apps; Qt apps follow GTK)
 - Custom Plymouth boot splash (UAP logo on Tokyo Night background — visible on hypervisor console / bare-metal display)
 - **Optional Telegram surface:** [Hermes Agent](https://hermes-agent.nousresearch.com/) (Nous Research, MIT) is the recommended way to reach the same assistant from your phone. Hermes runs as a systemd service, shares `~/workspace/CLAUDE.md` and `~/.hermes/SOUL.md` + memories with Claude Code, and is documented as a UAP component at `ai/hermes-agent/`.
+- **Optional agent reach layer:** [Agent Reach](https://github.com/Panniantong/Agent-Reach) adds read/search access to external content sources (web pages, YouTube subtitles, GitHub, RSS, Exa search, V2EX, basic Bilibili) for Hermes/Claude workflows. UAP documents the core install and safety posture at `ai/agent-reach/`; cookie-backed social channels are not enabled by default.
 - Optional admin-tooling components you can swap for your own — the bundled example, `m365-admin-tools`, installs PowerShell + the `MicrosoftTeams` module for operators who manage a Microsoft 365 tenant; drop it if you don't.
 
 ## Layout of this folder
@@ -128,9 +134,11 @@ os/                             # system chrome — what Ubuntu looks like
   gtk-theme/, plymouth/, xrdp/, workspace-title-daemon/
   m365-admin-tools/             # PowerShell + Teams Phone admin module
 ai/                             # AI-assistant-facing pieces
+  herdr/                        # Persistent terminal/agent workspace manager
   workspace-hub/                # ~/workspace/CLAUDE.md router template (ICM Layer 0)
-  desktop-entries/              # rofi launcher + icon for "Claude (workspace)"
+  desktop-entries/              # rofi launcher + icons for Herdr and "Claude (workspace)"
   hermes-agent/                 # Optional Telegram surface — install + SOUL.md / USER.md / MEMORY.md / systemd drop-in
+  agent-reach/                  # Optional read/search capability layer for external content sources
 workflows/                      # reusable workflow patterns (each with its own CLAUDE.md)
   dev/, helpdesk/, incidents/, requirements/
 ```
@@ -144,7 +152,7 @@ fork → set identity.yaml → apply.sh → RDP in
 ```
 
 1. **One identity file.** Everything that makes a machine yours — hostname, theme, which components to install, operator email — lives in `~/uap.local/identity.yaml`, outside this repo. Pick a profile or answer the wizard.
-2. **`apply.sh` renders + installs components.** Each piece of the desktop (`i3`, `wezterm`, `rofi`, `xrdp`, `gtk-theme`, `workspace-hub`, …) is a self-contained component. `apply.sh` renders its templates from your identity and installs it. Run all of them, or one at a time.
+2. **`apply.sh` renders + installs components.** Each piece of the desktop (`i3`, `wezterm`, `rofi`, `xrdp`, `gtk-theme`, `herdr`, `workspace-hub`, …) is a self-contained component. `apply.sh` renders its templates from your identity and installs it. Run all of them, or one at a time.
 3. **RDP in.** From your laptop or phone over your tailnet, you land on the Tokyo Night desktop with a Claude Code session already open in `~/workspace/`.
 
 Same `identity.yaml` on another box = the same workstation. That reproducibility — not the apt list — is the point.
