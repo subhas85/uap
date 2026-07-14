@@ -57,10 +57,8 @@ sudo apt install -y \
   fonts-jetbrains-mono fonts-inconsolata \
   microsoft-edge-stable     # see note below if package not found
 
-# Snap apps (browsers + glow markdown viewer)
-sudo snap install chromium
-sudo snap install firefox
-sudo snap install glow
+# No snap apps installed. Browsers come from upstream apt repos (Edge + Chrome, see below).
+# `bat` (installed above via apt) covers terminal file/markdown viewing.
 ```
 
 ### WezTerm terminal
@@ -367,7 +365,7 @@ From a remote machine on the same Tailnet, RDP to this VM (`mstsc`, Remmina, etc
 - `Mod1+d` opens rofi launcher (`drun`) — includes "Claude (workspace)" entry
 - `Mod1+c` opens a fresh Claude Code session in `~/workspace/`
 - `Mod1+n` opens thunar
-- `Mod1+Shift+Return` opens firefox
+- `Mod1+Shift+Return` opens microsoft-edge
 - `Print` or `Mod1+Shift+s` opens flameshot
 - `Mod1+1`..`9`,`0` switches workspaces; `Mod1+Shift+...` moves windows
 - `Mod1+u` grows the active tiled window to ~75% in whichever split direction has a neighbor (one-shot resize; stays tiled)
