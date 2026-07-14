@@ -52,3 +52,4 @@ A workspace `<workspace>/projects/<name>.md` should typically be a *short* one-p
 - [xrdp #3249 — partial-upgrade RandR error](https://github.com/neutrinolabs/xrdp/issues/3249)
 - [xrdp #3339 — will 0.10 land on Ubuntu 24.04?](https://github.com/neutrinolabs/xrdp/discussions/3339)
 - [Microsoft Remote Desktop — Android keyboard modes](https://learn.microsoft.com/en-us/azure/virtual-desktop/users/client-features-android-chrome-os) (where to find the scancode-vs-Unicode toggle)
+- [alacritty #8385 — backspace/enter release sent as legacy bytes under kitty keyboard protocol](https://github.com/alacritty/alacritty/issues/8385) — doubles backspace in herdr and other kitty-protocol apps; fixed in 0.15 ([#8397](https://github.com/alacritty/alacritty/pull/8397)), so `apply.sh` installs alacritty from `ppa:aslatter/ppa` instead of the Ubuntu archive (noble ships 0.13.2). Watch [#8964](https://github.com/alacritty/alacritty/issues/8964) — regression reported on 0.18-dev.

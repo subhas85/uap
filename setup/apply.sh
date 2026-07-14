@@ -634,11 +634,21 @@ install_alacritty() {
     local target="$HOME_DIR/.config/alacritty"
 
     if [ "$DRY_RUN" = 1 ]; then
-        log "alacritty: DRY-RUN — would apt install alacritty"
+        log "alacritty: DRY-RUN — would add ppa:aslatter/ppa and apt install alacritty"
         log "alacritty: DRY-RUN — would install $target/alacritty.toml"
         return 0
     fi
 
+    # Ubuntu archive ships alacritty <= 0.13.x, whose kitty-keyboard-protocol
+    # implementation sends Backspace release events as a second bare 0x7f
+    # (alacritty/alacritty#8385, fixed in 0.15) — doubles every backspace in
+    # apps that request release events (herdr, modern TUIs). The PPA tracks
+    # a fixed release.
+    if ! grep -rq "aslatter/ppa" /etc/apt/sources.list.d/ 2>/dev/null; then
+        run_sudo add-apt-repository -y ppa:aslatter/ppa
+        run_sudo apt-get update -qq
+        log "alacritty: added ppa:aslatter/ppa (archive 0.13.x has backspace-doubling bug)"
+    fi
     apt_install alacritty
     install -d "$target"
     install -m 644 "$render/alacritty.toml" "$target/alacritty.toml"
