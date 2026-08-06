@@ -4,6 +4,8 @@
 
 **Goal:** Land the `claude-settings` apply.sh component that renders `~/.claude/settings.json` and `~/<workspace_hub>/.claude/settings.json` per the active profile's permission tier.
 
+> **⚠️ Correction (2026-07-27):** File-path denies must use `Edit(path)` **only**. `Edit` rules cover every file-writing tool (Write, Edit, NotebookEdit); `Write(path)` deny/ask rules are **not** enforced by the file-permission engine and make Claude Code warn at startup. Some illustrative JSON blocks below still show the old `Edit`+`Write` pairs — the **authoritative** templates in `ai/claude-settings/*.settings.json.tmpl` have had the `Write(path)` halves removed. Keep `Write(**)` in *allow* lists (that governs the Write tool, not a path).
+
 **Architecture:** New component directory under `ai/claude-settings/` with one settings.json template per tier plus a shared workspace overlay. New `install_claude_settings()` hook in `apply.sh` resolves the active role, picks the matching template, refuses to overwrite an existing user settings.json without `--force-claude-settings`, and installs the workspace overlay to the hub.
 
 **Tech Stack:** Bash (apply.sh), envsubst (rendering), jq (validation), YAML (profile manifests), JSON (settings.json templates).
@@ -813,10 +815,10 @@ Expected: no diff. The real `~/.claude/settings.json` is untouched (either left 
 
 ```bash
 jq '.permissions.deny | length' $RENDER/workspace-overlay.settings.json
-# Expected: 8 (the four pairs of Edit/Write rules)
+# Expected: 4 (Edit-only rules; the Write(path) halves were removed — they are no-ops)
 
 jq '.permissions.deny[]' $RENDER/workspace-overlay.settings.json
-# Expected: lines like "Edit(/**/.env)", "Write(/**/.env)", etc.
+# Expected: "Edit(/**/.env)", "Edit(/**/*.pem)", "Edit(/**/*.key)", "Edit(/**/secrets/**)"
 ```
 
 - [ ] **Step 6: Repeat dry-run for each remaining profile**

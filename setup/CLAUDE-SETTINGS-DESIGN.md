@@ -2,6 +2,8 @@
 
 Sibling to `DESIGN.md`. Covers how UAP deploys Claude Code permission settings (`~/.claude/settings.json` + a per-workspace overlay) keyed off the active profile's permission tier.
 
+> **⚠️ Correction (2026-07-27):** File-path denies must use `Edit(path)` **only**. `Edit` rules cover every file-writing tool (Write, Edit, NotebookEdit); `Write(path)` deny/ask rules are **not** enforced by the file-permission engine and make Claude Code warn at startup. The JSON blocks below still show the old `Edit`+`Write` pairs for illustration — the **authoritative** templates in `ai/claude-settings/*.settings.json.tmpl` have had the `Write(path)` halves removed. `Write(**)` in *allow* lists is fine (it governs the Write tool, not a path).
+
 ## Why
 
 Today the four UAP profiles (`personal-lab`, `engineer`, `staff`, `production-admin`) differ on five fields under `ai.*` of `identity.yaml` — autostart, permission mode, remote control, concierge. That covers the **runtime mode** of Claude Code but does nothing about **what tools Claude is allowed to call** once a session is running. Without a permission settings layer:

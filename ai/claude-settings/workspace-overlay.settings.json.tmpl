@@ -1,15 +1,12 @@
 {
   "_comment": "Per-workspace tightening. Operators add deny rules here for paths within the workspace hub that need extra protection (e.g., sensitive ops/ subfolders, dev/<repo>/.env files). Deny rules here stack on top of the global ~/.claude/settings.json regardless of role.",
   "permissions": {
+    "_deny_comment": "File-path protection MUST use Edit(...) matchers — they cover every file-writing tool (Write, Edit, NotebookEdit). Write(path) rules are NOT enforced by the file-permission engine and make Claude Code warn at startup; do not add them.",
     "deny": [
       "Edit(/**/.env)",
-      "Write(/**/.env)",
       "Edit(/**/*.pem)",
-      "Write(/**/*.pem)",
       "Edit(/**/*.key)",
-      "Write(/**/*.key)",
-      "Edit(/**/secrets/**)",
-      "Write(/**/secrets/**)"
+      "Edit(/**/secrets/**)"
     ]
   }
 }
