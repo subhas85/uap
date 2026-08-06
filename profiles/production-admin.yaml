@@ -107,3 +107,4 @@ components_enabled:
   - workspace-hub
   - apps
   - claude-settings
+  - herdr

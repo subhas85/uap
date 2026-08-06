@@ -8,6 +8,7 @@
 #   apply.sh --dry-run                  # render + show what would change; install nothing
 #   apply.sh --no-sudo                  # skip steps that need root
 #   apply.sh --force-claude-settings    # overwrite existing ~/.claude/settings.json (claude-settings component only)
+#   apply.sh --force-herdr-config       # overwrite existing ~/.config/herdr/config.toml (herdr component only)
 #
 # See ~/uap/setup/DESIGN.md for the contract.
 #
@@ -24,6 +25,7 @@ SCHEMA_VERSION=1
 DRY_RUN=0
 NO_SUDO=0
 FORCE_CLAUDE_SETTINGS=0
+FORCE_HERDR_CONFIG=0
 COMPONENTS_REQUESTED=()
 
 # --- Helpers --------------------------------------------------------------
@@ -106,7 +108,8 @@ while [ $# -gt 0 ]; do
         --dry-run)                DRY_RUN=1;                shift ;;
         --no-sudo)                NO_SUDO=1;                shift ;;
         --force-claude-settings)  FORCE_CLAUDE_SETTINGS=1;  shift ;;
-        -h|--help)                sed -n '3,12p' "$0";      exit 0 ;;
+        --force-herdr-config)     FORCE_HERDR_CONFIG=1;     shift ;;
+        -h|--help)                sed -n '3,13p' "$0";      exit 0 ;;
         --*)        die "unknown flag: $1" ;;
         *)          COMPONENTS_REQUESTED+=("$1"); shift ;;
     esac
@@ -337,7 +340,7 @@ install_desktop_entries() {
     # dead Alt+d item on fresh installs where the separate herdr component has
     # not been run explicitly.
     if ! command -v herdr >/dev/null 2>&1; then
-        install_herdr
+        _install_herdr_binary
     fi
 
     install -m 644 "$render/claude-workspace.desktop" \
@@ -363,19 +366,106 @@ install_desktop_entries() {
     log "desktop-entries: installed Claude + Herdr launchers"
 }
 
-install_herdr() {
-    if [ "$DRY_RUN" = 1 ]; then
-        log "herdr: DRY-RUN — would install/update ~/.local/bin/herdr from https://herdr.dev/install.sh if missing"
-        return 0
-    fi
+# Minimum Herdr version the tracked config.toml + plugin set assume.
+# 0.7.4 introduced the "popup" pane type Claude Usage renders into.
+HERDR_MIN_VERSION="0.7.4"
 
+_herdr_version() { herdr --version 2>/dev/null | awk '{print $2}'; }
+
+# _herdr_version_ok <have> — true if installed Herdr >= HERDR_MIN_VERSION.
+_herdr_version_ok() {
+    local have="$1"
+    [ -n "$have" ] || return 1
+    [ "$(printf '%s\n%s\n' "$HERDR_MIN_VERSION" "$have" | sort -V | head -1)" = "$HERDR_MIN_VERSION" ]
+}
+
+# Binary only. Split out so desktop-entries can guarantee the Alt+d launcher
+# resolves without dragging in the whole config/plugin layer.
+_install_herdr_binary() {
     install -d "$HOME_DIR/.local/bin"
     if command -v herdr >/dev/null 2>&1; then
-        log "herdr: already installed at $(command -v herdr) ($(herdr --version 2>/dev/null || true))"
+        log "herdr: already installed at $(command -v herdr) ($(_herdr_version))"
     else
         log "herdr: installing latest stable release from upstream manifest"
         HERDR_INSTALL_DIR="$HOME_DIR/.local/bin" sh -c 'curl -fsSL https://herdr.dev/install.sh | sh'
     fi
+}
+
+install_herdr() {
+    local render="$RENDER_DIR/herdr"
+    local cfg_dir="$HOME_DIR/.config/herdr"
+    local cfg="$cfg_dir/config.toml"
+    local unit_dir="$HOME_DIR/.config/systemd/user"
+
+    if [ "$DRY_RUN" = 1 ]; then
+        log "herdr: DRY-RUN — would install/update ~/.local/bin/herdr from https://herdr.dev/install.sh if missing"
+        log "herdr: DRY-RUN — would install $render/config.toml to $cfg (existing file → .uap-proposed unless --force-herdr-config)"
+        log "herdr: DRY-RUN — would install plugins from $render/plugins.list via install-plugins.sh"
+        log "herdr: DRY-RUN — would install sysmeter to $HOME_DIR/.local/bin/herdr-sysmeter + enable herdr-sysmeter.service (user)"
+        return 0
+    fi
+
+    _install_herdr_binary
+
+    # Everything below assumes a Herdr new enough for the tracked config. Bail
+    # out of the config layer rather than half-applying it against an old build.
+    local have
+    have=$(_herdr_version)
+    if ! _herdr_version_ok "$have"; then
+        warn "herdr: installed version '${have:-unknown}' < $HERDR_MIN_VERSION — skipping config, plugins and sysmeter. Update Herdr, then rerun: apply.sh herdr"
+        return 0
+    fi
+
+    # ---- config.toml ----
+    # Herdr rewrites parts of this file itself (onboarding state, plugin
+    # registry), so never clobber an operator's file silently — same contract
+    # as claude-settings.
+    install -d "$cfg_dir"
+    if [ -f "$cfg" ] && [ "$FORCE_HERDR_CONFIG" != 1 ]; then
+        if cmp -s "$render/config.toml" "$cfg"; then
+            log "herdr: $cfg already matches the tracked config"
+        else
+            install -m 644 "$render/config.toml" "$cfg.uap-proposed"
+            warn "herdr: $cfg already exists and differs; wrote proposed to $cfg.uap-proposed — diff and merge manually, or rerun with --force-herdr-config to overwrite."
+        fi
+    else
+        local how=""
+        if [ -f "$cfg" ]; then
+            cp -f "$cfg" "$cfg.uap-bak"
+            how=" (overwrote existing; previous saved to $cfg.uap-bak)"
+        fi
+        install -m 644 "$render/config.toml" "$cfg"
+        log "herdr: installed $cfg$how"
+    fi
+
+    # ---- plugins ----
+    # plugins.list/.lock are the declarative intent; install-plugins.sh is the
+    # lazy-free fallback that works on a bare box.
+    if [ -x "$render/install-plugins.sh" ]; then
+        if "$render/install-plugins.sh"; then
+            log "herdr: plugin set installed from plugins.list"
+        else
+            warn "herdr: install-plugins.sh failed — install manually with 'herdr plugin install <owner>/<repo>'"
+        fi
+    fi
+
+    # ---- sysmeter (CPU/RAM sidebar row) ----
+    install -m 755 "$render/sysmeter.sh" "$HOME_DIR/.local/bin/herdr-sysmeter"
+    install -d "$unit_dir"
+    install -m 644 "$render/herdr-sysmeter.service" "$unit_dir/herdr-sysmeter.service"
+
+    if systemctl --user show-environment >/dev/null 2>&1; then
+        systemctl --user daemon-reload
+        if systemctl --user enable --now herdr-sysmeter.service 2>/dev/null; then
+            log "herdr: sysmeter installed and enabled (systemctl --user status herdr-sysmeter)"
+        else
+            warn "herdr: sysmeter unit installed but 'systemctl --user enable --now herdr-sysmeter' failed — check 'systemctl --user status herdr-sysmeter'."
+        fi
+    else
+        warn "herdr: no user systemd session — unit installed but not enabled. Run 'systemctl --user enable --now herdr-sysmeter' from a login session."
+    fi
+
+    log "herdr: config, plugins and sysmeter applied. Reload a running server with 'herdr server reload-config'."
 }
 
 install_xrdp() {

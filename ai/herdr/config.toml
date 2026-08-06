@@ -1,0 +1,38 @@
+onboarding = false
+[ui]
+agent_panel_sort = "spaces"
+
+[theme]
+name = "tokyo-night"
+auto_switch = false
+
+# --- Agent Usage (usagebar): per-agent context % + provider rate-limit rows ---
+[ui.sidebar.agents]
+row_gap = 0
+rows = [
+  ["state_icon", "tab", "pane"],
+  ["$provider", "$limit"],
+  ["$context"],
+]
+
+# --- Claude Usage (claude-usage): Session%/Week% quota token, rendered only in the
+# plugin's dedicated top "Claude" mini-space (intentional; do not close that space) ---
+[ui.sidebar.spaces]
+rows = [
+  ["state_icon", "workspace"],
+  ["$claude_usage"],
+  ["$sys"],
+]
+
+# Toast delivery (usagebar rate-limit notifications)
+[ui.toast]
+delivery = "herdr"
+
+[ui.toast.herdr]
+position = "bottom-left"
+
+# herdr-lazy: declarative plugin manager — manage pane
+[[keys.command]]
+key = "prefix+shift+l"
+type = "plugin_action"
+command = "herdr-lazy.manage"

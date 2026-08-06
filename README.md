@@ -104,7 +104,7 @@ Future work — fully hands-off provisioning from a hypervisor API (e.g., Proxmo
 - Ubuntu Server 24.04 LTS as the base
 - xrdp + xorgxrdp for RDP access (Tailscale-friendly)
 - i3 window manager (Tokyo Night theme, JetBrainsMono Nerd Font)
-- [Herdr](https://herdr.dev/) terminal workspace manager: persistent panes/agents across RDP and SSH, with an **Alt+d** rofi app-launcher entry for `Herdr (terminal workspace)`
+- [Herdr](https://herdr.dev/) terminal workspace manager: persistent panes/agents across RDP and SSH, with an **Alt+d** rofi app-launcher entry for `Herdr (terminal workspace)`. The `herdr` component ships the whole surface configured — Tokyo Night theme, the pinned three-plugin set (Claude quota meter, per-agent context/rate-limit rows, declarative plugin manager) and a CPU/RAM sidebar meter — not just the bare binary. See `ai/herdr/README.md`.
 - WezTerm + Alacritty terminals, rofi launcher, flameshot screenshots, feh wallpaper, thunar file manager
 - Browsers: Microsoft Edge, Google Chrome, Chromium (snap), Firefox (snap)
 - Markdown editor: Typora (with Tokyo Night theme installed)
@@ -136,7 +136,8 @@ os/                             # system chrome — what Ubuntu looks like
   gtk-theme/, plymouth/, xrdp/, workspace-title-daemon/
   m365-admin-tools/             # PowerShell + Teams Phone admin module
 ai/                             # AI-assistant-facing pieces
-  herdr/                        # Persistent terminal/agent workspace manager
+  herdr/                        # Persistent terminal/agent workspace manager — binary,
+                                #   config.toml, pinned plugin set, CPU/RAM sidebar meter
   workspace-hub/                # ~/workspace/CLAUDE.md router template (ICM Layer 0)
   desktop-entries/              # rofi launcher + icons for Herdr and "Claude (workspace)"
   hermes-agent/                 # Optional Telegram surface — install + SOUL.md / USER.md / MEMORY.md / systemd drop-in

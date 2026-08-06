@@ -1,0 +1,15 @@
+[Unit]
+Description=herdr sysmeter — publish host CPU%%/RAM%% to the herdr sidebar
+Documentation=https://github.com/subhas85/uap/blob/main/ai/herdr/README.md
+After=default.target
+
+[Service]
+Type=simple
+ExecStart=%h/.local/bin/herdr-sysmeter
+Restart=on-failure
+RestartSec=10
+# The reporter is a ~5s poll loop; keep it out of the way of real work.
+Nice=10
+
+[Install]
+WantedBy=default.target
