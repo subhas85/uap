@@ -78,6 +78,7 @@ ai:
   use_icm: true
   workspace_hub_name: workspace
   subworkspaces: [uap]
+  subworkspace_mode: create   # create real dirs under the hub (symlink = link pre-existing ~/<ws> in)
   concierge: false
   chat_bridge: none
 

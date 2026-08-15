@@ -161,6 +161,7 @@ Customizes: directory name, i3 autostart `--working-directory`, all references.
 ### Q7.6 Subworkspaces inside the hub
 Default: **create fresh subdirectories under `~/workspace/`** — name the project areas you want (e.g., `dev`, `ops`, `notes`, `clients`, whatever fits). The wizard creates the directories empty; the operator decides what goes in each. The `~/uap` framework repo is always symlinked in as `~/workspace/uap` since that's the only top-level folder UAP owns.
 Alternative: **symlink existing top-level folders** (`~/ops/`, `~/dev/`, etc.) into `~/workspace/` — for operators migrating an existing layout where those folders already live at `~/`.
+Customizes: `identity.ai.subworkspace_mode` — `create` (default) or `symlink`. In `create` mode `apply.sh` will not overwrite an existing symlink left by an earlier `symlink`-mode run; it warns instead, so flipping the mode never orphans a real folder.
 
 UAP is intentionally unopinionated about what *goes inside* each subworkspace — every operator works differently. If you want a folder-as-workflow pattern, see `references.md` for a link to one approach (ICM), but it's optional.
 

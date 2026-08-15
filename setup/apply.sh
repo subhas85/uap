@@ -138,7 +138,7 @@ export BORDER_HEX INACTIVE_HEX
 export MOD_KEY WORKSPACE_COUNT GTK_THEME
 export WORKSPACE_HUB_NAME PERMISSION_MODE
 export RDP_LCID SESMAN_POLICY INSTALL_RECONNECTWM INSTALL_WATCHDOG WATCHDOG_INTERVAL_SECONDS WATCHDOG_CLIPBOARD_ACTIVE_PROBE TCP_KEEPALIVE MAX_BPP
-export SUBWORKSPACES_BLOCK
+export SUBWORKSPACES_BLOCK HUB_LAYOUT_NOTE
 
 OS_NAME=$(yq         '.os.name'              "$IDENTITY")
 OS_NAME_LOWER=$(yq   '.os.name_lower'        "$IDENTITY")
@@ -185,16 +185,37 @@ WATCHDOG_CLIPBOARD_ACTIVE_PROBE=$(yq '.xrdp.watchdog_clipboard_active_probe // f
 TCP_KEEPALIVE=$(yq             '.xrdp.tcp_keepalive // true'              "$IDENTITY")
 MAX_BPP=$(yq                   '.xrdp.max_bpp // 24'                      "$IDENTITY")
 
+# How subworkspaces are materialised inside the hub (QUESTIONNAIRE Q7.6):
+#   create  — real directories under ~/<hub>/ (default; the hub IS the layout)
+#   symlink — link pre-existing ~/<ws> folders into the hub (migrating operators)
+# ~/uap is always a symlink regardless of mode: it's the only top-level folder UAP owns.
+SUBWORKSPACE_MODE=$(yq '.ai.subworkspace_mode // "create"' "$IDENTITY")
+case "$SUBWORKSPACE_MODE" in
+    create|symlink) ;;
+    *) echo "identity.ai.subworkspace_mode must be 'create' or 'symlink' (got '$SUBWORKSPACE_MODE')" >&2; exit 1 ;;
+esac
+
 # Generate the subworkspace markdown block from identity.ai.subworkspaces[]
 SUBWORKSPACES_BLOCK=$(
     while IFS= read -r ws; do
         [ -z "$ws" ] && continue
-        printf "  %-9s → ~/%s\n" "${ws}/" "${ws}"
+        if [ "$ws" = "uap" ] || [ "$SUBWORKSPACE_MODE" = "symlink" ]; then
+            printf "  %-9s → ~/%s\n" "${ws}/" "${ws}"
+        else
+            printf "  %s\n" "${ws}/"
+        fi
     done < <(yq '.ai.subworkspaces[]' "$IDENTITY")
 )
 
+# One-line note under the layout block, true for whichever mode is active.
+if [ "$SUBWORKSPACE_MODE" = "symlink" ]; then
+    HUB_LAYOUT_NOTE="The subworkspaces are symlinks to real folders one level up in \$HOME — paths like \`${HOME_DIR}/<subworkspace>/...\` still work everywhere; this hub just gives the agent a clean entry point that excludes user dotfiles by default."
+else
+    HUB_LAYOUT_NOTE="The subworkspaces are real directories inside the hub — everything you work on lives under \`${HOME_DIR}/${WORKSPACE_HUB_NAME}/\`, so the agent gets a clean entry point that excludes user dotfiles by default. \`uap/\` is the exception: it's a symlink to \`${HOME_DIR}/uap\`, the framework repo."
+fi
+
 # Allow-list of variables that envsubst will substitute. Anything else (literal $foo, $PATH, etc.) is left alone.
-TEMPLATE_VARS='${OS_NAME} ${OS_NAME_LOWER} ${TAGLINE} ${HOSTNAME} ${HOME_DIR} ${USERNAME} ${OPERATOR_EMAIL} ${OPERATOR_ROLE} ${FONT_NAME} ${FONT_SIZE} ${BG_HEX} ${BG_ALT_HEX} ${BG_R} ${BG_G} ${BG_B} ${FG_HEX} ${FG_DIM_HEX} ${ACCENT_HEX} ${URGENT_HEX} ${GREEN_HEX} ${YELLOW_HEX} ${PURPLE_HEX} ${CYAN_HEX} ${BORDER_HEX} ${INACTIVE_HEX} ${MOD_KEY} ${WORKSPACE_COUNT} ${WORKSPACE_HUB_NAME} ${PERMISSION_MODE} ${RDP_LCID} ${WATCHDOG_INTERVAL_SECONDS} ${GTK_THEME} ${SUBWORKSPACES_BLOCK}'
+TEMPLATE_VARS='${OS_NAME} ${OS_NAME_LOWER} ${TAGLINE} ${HOSTNAME} ${HOME_DIR} ${USERNAME} ${OPERATOR_EMAIL} ${OPERATOR_ROLE} ${FONT_NAME} ${FONT_SIZE} ${BG_HEX} ${BG_ALT_HEX} ${BG_R} ${BG_G} ${BG_B} ${FG_HEX} ${FG_DIM_HEX} ${ACCENT_HEX} ${URGENT_HEX} ${GREEN_HEX} ${YELLOW_HEX} ${PURPLE_HEX} ${CYAN_HEX} ${BORDER_HEX} ${INACTIVE_HEX} ${MOD_KEY} ${WORKSPACE_COUNT} ${WORKSPACE_HUB_NAME} ${PERMISSION_MODE} ${RDP_LCID} ${WATCHDOG_INTERVAL_SECONDS} ${GTK_THEME} ${SUBWORKSPACES_BLOCK} ${HUB_LAYOUT_NOTE}'
 
 # --- Generic render: walk configs/<component>/, produce rendered/<component>/
 
@@ -251,24 +272,39 @@ install_workspace_hub() {
     local hub="$HOME_DIR/$WORKSPACE_HUB_NAME"
 
     if [ "$DRY_RUN" = 1 ]; then
-        log "workspace-hub: DRY-RUN — would install CLAUDE.md + subworkspace symlinks at $hub"
+        log "workspace-hub: DRY-RUN — would install CLAUDE.md at $hub, subworkspaces in '$SUBWORKSPACE_MODE' mode"
         return 0
     fi
 
     install -d "$hub"
 
-    # Symlink each declared subworkspace from ~/<name> into the hub
+    # Materialise each declared subworkspace inside the hub.
+    #   uap          → always a symlink to ~/uap (the framework repo UAP owns)
+    #   symlink mode → link a pre-existing ~/<ws> in (migrating operators)
+    #   create mode  → a real directory under the hub (default)
     while IFS= read -r ws; do
         [ -z "$ws" ] && continue
-        if [ -d "$HOME_DIR/$ws" ]; then
-            ln -sfn "$HOME_DIR/$ws" "$hub/$ws"
-        else
-            warn "workspace-hub: ~/$ws not found — symlink skipped"
+
+        if [ "$ws" = "uap" ] || [ "$SUBWORKSPACE_MODE" = "symlink" ]; then
+            if [ -d "$HOME_DIR/$ws" ]; then
+                ln -sfn "$HOME_DIR/$ws" "$hub/$ws"
+            else
+                warn "workspace-hub: ~/$ws not found — symlink skipped"
+            fi
+            continue
         fi
+
+        # create mode: never clobber an existing symlink left by a previous
+        # symlink-mode run — that would orphan the operator's real folder.
+        if [ -L "$hub/$ws" ]; then
+            warn "workspace-hub: $hub/$ws is an existing symlink to $(readlink -f "$hub/$ws") — left as-is (mode is 'create'; remove the link by hand to convert)"
+            continue
+        fi
+        install -d "$hub/$ws"
     done < <(yq '.ai.subworkspaces[]' "$IDENTITY")
 
     install -m 644 "$render/CLAUDE.md" "$hub/CLAUDE.md"
-    log "workspace-hub: installed CLAUDE.md + symlinks at $hub"
+    log "workspace-hub: installed CLAUDE.md + subworkspaces ($SUBWORKSPACE_MODE mode) at $hub"
 }
 
 install_i3() {

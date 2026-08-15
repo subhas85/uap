@@ -50,6 +50,7 @@ ai:
   Q7.5_icm: true
   Q7.6_workspace_hub_name: workspace
   Q7.7_subworkspaces: [ops, dev, uap, dashboard]
+  Q7.7_subworkspace_mode: create   # create | symlink — see QUESTIONNAIRE Q7.6
 
 boot:
   Q8.1_custom_plymouth: true

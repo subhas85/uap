@@ -21,7 +21,17 @@ Add items here when you encounter a "we should think about X" moment, with: what
 
 Each option has implications for `setup/CLAUDE.md` Section 10 seeding (which paths get created), the QUESTIONNAIRE wording, the `workspace-hub` install hook in `apply.sh`, and the public README.
 
-**Status:** flagged, not decided. Brainstorm needed before the next wizard iteration.
+**Status: DECIDED 2026-08-15 — Option A.** Everything lives inside `~/workspace/`: `ops`, `dev`, and any other subworkspace are real directories under the hub, not symlinks to `~/`. The single exception is `uap/`, which stays a symlink to `~/uap` because the framework repo is the only top-level folder UAP owns and it must be clonable/updatable on its own.
+
+**Rationale (user, 2026-08-15):** "on all new boxes going forward it makes more sense for everything to live inside the ~/workspace folder … ops folder should also live in workspace." One canonical home per machine; the two-location split was only ever compatibility scaffolding for a pre-existing `~/` layout.
+
+**Implemented 2026-08-15:** new `identity.ai.subworkspace_mode` (`create` | `symlink`, default `create`).
+- `apply.sh` `install_workspace_hub` creates real dirs in `create` mode; `symlink` mode keeps the old behaviour for migrating operators. `uap` is force-symlinked in both.
+- In `create` mode the hook refuses to clobber an existing symlink left by a prior `symlink`-mode run — it warns and leaves it, so nobody's real `~/ops` gets orphaned by a mode flip.
+- `ai/workspace-hub/CLAUDE.md.tmpl` no longer hardcodes the "these are symlinks" sentence; it renders `${HUB_LAYOUT_NOTE}`, which is written per mode.
+- All four profiles + `answers.example.yaml` carry the new key.
+
+**Not migrated:** this author's adminbox still has `~/ops` + `~/workspace/ops` symlink and does *not* enable the `workspace-hub` component, so it is unaffected. Converting it is a separate, manual job (git remotes, absolute paths in CLAUDE.md/memory, running services) — do not let a future `apply.sh` run do it implicitly.
 
 ---
 
@@ -84,3 +94,18 @@ Second wizard test against a freshly-rebuilt VM (107) running Ubuntu Server 24.0
 - [x] **Operator apps (Edge, Chrome, Typora, btop, bat, glow, thunar, flameshot) not installed.** `apply.sh` had no hook for the contents of `identity.apps.*`. **Done (commit e83a778):** new `apps` component + `install_apps()` hook that reads `identity.apps.{browsers,markdown_editor,terminal_tools,file_manager,screenshot}` and installs via apt or third-party repos (Microsoft Edge, Google Chrome, Typora) as appropriate. All four profile yamls now list `apps` in `components_enabled`.
 
 Next: third wizard test on a freshly-rebuilt VM to confirm a green-field box reaches a usable state from `bootstrap.sh` alone.
+
+---
+
+## Wizard test feedback log (2026-08-15, third run)
+
+Green-field Ubuntu Server 24.04 on a Proxmox VM, deployed for a second operator on the same host. Full record kept outside this repo at `~/uap.local/wizard-test-YYYY-MM-DD.md`. **Verdict: ship it** — `bootstrap.sh` + `apply.sh` reached a usable box, exit 0, one non-blocking warning. Every gap from the 2026-05-15 run is confirmed fixed (apt installs per component, patched Nerd Font, full xrdp phase, `yq` in bootstrap, the `apps` hook, `remoteControlAtStartup`).
+
+Also the first real-box exercise of `subworkspace_mode: create` — hub came out with `ops/` and `dev/` as real directories and `uap` as the lone symlink, and the template rendered the create-mode layout note.
+
+New items:
+
+- **`network.rdp_scope` is decorative — security.** All four profiles set `rdp_scope: tailscale-only`, but the key is read *nowhere* in `apply.sh` or any template. `install_xrdp` does an unconditional `run_sudo ufw allow 3389/tcp`, so a profile advertising a Tailscale-only RDP surface actually opens 3389 to the entire subnet. Either implement the scoping (`ufw allow in on tailscale0 to any port 3389` when set) or delete the key so it stops making a promise the code doesn't keep. **Highest-priority item here.**
+- **herdr plugins need a Rust toolchain.** `install-plugins.sh` fails on a clean box: `no prebuilt binary was usable, and cargo could not be found`. herdr itself and `herdr-sysmeter` install fine, so this is only the plugin step — but it emits a WARN on every green-field install. Ship a usable prebuilt, add `cargo` to the herdr apt list, or make plugins opt-in.
+- **qemu-guest-agent still manual.** Carried over unresolved from 2026-05-14; had to be hand-installed again. Now that "UAP runs on a hypervisor VM" is the normal case rather than the exception, this is worth an opt-in component — without it the host can't do a graceful `qm reboot` or report the guest IP.
+- **No headless self-check.** Phase 4 of `WIZARD-TEST-CHECKLIST.md` (keybindings, bar, autostart, dark menus) all require a human in an RDP session, so an automated deployment can't self-report success. An `apply.sh --self-check` asserting config files, systemd units and PATH entries exist would cover most of it.
