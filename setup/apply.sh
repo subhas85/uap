@@ -556,7 +556,7 @@ configure_rdp_firewall() {
                 warn "xrdp: rdp_scope=lan but the primary subnet could not be determined; leaving 3389 unrestricted"
                 return 0
             fi
-            # normalise 10.0.11.41/24 -> 10.0.11.0/24
+            # normalise a host address to its network: 192.0.2.41/24 -> 192.0.2.0/24
             cidr=$(python3 -c "import ipaddress,sys; print(ipaddress.ip_network(sys.argv[1], strict=False))" "$cidr" 2>/dev/null) || {
                 warn "xrdp: could not normalise subnet for rdp_scope=lan; leaving 3389 unrestricted"; return 0; }
             rule_args=(allow from "$cidr" to any port 3389 proto tcp)
