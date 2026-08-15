@@ -688,9 +688,22 @@ install_xrdp() {
         fi
     fi
 
+    # 4b. Drop-in: run xrdp in the foreground (Type=simple) so systemd tracks the
+    #     main PID. The packaged Type=forking unit races its own PID file on
+    #     24.04 and strands the unit in `activating`. See the file for detail.
+    if [ -f "$UAP_DIR/os/xrdp/xrdp-nodaemon.conf" ]; then
+        run_sudo install -d -m 755 /etc/systemd/system/xrdp.service.d
+        run_sudo install -m 644 -o root -g root "$UAP_DIR/os/xrdp/xrdp-nodaemon.conf" \
+            /etc/systemd/system/xrdp.service.d/10-uap-nodaemon.conf
+        run_sudo systemctl daemon-reload >/dev/null 2>&1 || true
+        log "xrdp: installed nodaemon drop-in (Type=simple; systemd tracks the main PID)"
+    fi
+
     # 5. Enable + start xrdp; restart sesman so the new Policy takes effect.
-    run_sudo systemctl enable --now xrdp >/dev/null 2>&1 || true
+    #    restart (not just enable --now) so the drop-in above takes effect on a re-run.
+    run_sudo systemctl enable xrdp >/dev/null 2>&1 || true
     run_sudo systemctl restart xrdp-sesman >/dev/null 2>&1 || true
+    run_sudo systemctl restart xrdp >/dev/null 2>&1 || true
 
     # 6. Restrict who can reach 3389, per identity.network.rdp_scope.
     configure_rdp_firewall
@@ -760,7 +773,18 @@ install_xrdp() {
         esac
     fi
 
-    log "xrdp: service enabled, port 3389 opened, key.pem perms set"
+    # 8. Verify rather than assume. Everything above can succeed while the unit
+    #    fails to come up; reporting success regardless is how the Type=forking
+    #    PID race went unnoticed.
+    local xrdp_state sesman_state
+    xrdp_state=$(systemctl is-active xrdp 2>/dev/null || true)
+    sesman_state=$(systemctl is-active xrdp-sesman 2>/dev/null || true)
+    if [ "$xrdp_state" = "active" ] && [ "$sesman_state" = "active" ]; then
+        log "xrdp: service enabled and active (sesman active), key.pem perms set"
+    else
+        warn "xrdp: finished, but xrdp=$xrdp_state sesman=$sesman_state — expected both 'active'."
+        warn "xrdp: check 'journalctl -u xrdp -u xrdp-sesman -n50'. RDP may not accept connections."
+    fi
 }
 
 install_xinitrc() {
