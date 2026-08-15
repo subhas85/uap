@@ -5,6 +5,13 @@ After=default.target
 
 [Service]
 Type=simple
+# sysmeter.sh calls `herdr` by name, but a systemd --user unit does NOT inherit
+# the login shell's PATH — it gets the manager's default, which has no
+# ~/.local/bin, which is exactly where apply.sh installs herdr. The lookup then
+# returns empty and the script's `[ -n "$wid" ]` guard silently skips reporting:
+# the service sits there `active` forever, publishing nothing, with no error.
+# (The older i3 `exec_always` launch never hit this — it inherits the session PATH.)
+Environment=PATH=%h/.local/bin:/usr/local/bin:/usr/bin:/bin:/usr/local/sbin:/usr/sbin:/sbin
 ExecStart=%h/.local/bin/herdr-sysmeter
 Restart=on-failure
 RestartSec=10
