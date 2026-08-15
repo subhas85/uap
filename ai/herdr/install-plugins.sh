@@ -25,9 +25,41 @@ if [ "$(printf '%s\n%s\n' "$need" "$have" | sort -V | head -1)" != "$need" ]; th
   exit 1
 fi
 
+# herdr-lazy builds from source when no prebuilt binary matches the platform, and
+# a fresh Ubuntu Server has no Rust toolchain. Say so up front rather than failing
+# three plugins in with a build error.
+if ! command -v cargo >/dev/null 2>&1; then
+  echo "WARN: cargo not found — herdr-lazy falls back to 'cargo build' when no prebuilt" >&2
+  echo "      binary is usable, and will fail without it. Fix: sudo apt install cargo" >&2
+fi
+
+# Resolve each plugin to the commit recorded in plugins.lock so a rebuild reproduces
+# the set that was actually tested, instead of silently pulling whatever is latest.
+# Set UNPINNED=1 to deliberately take latest (then refresh the lock afterwards).
+LOCK="$(dirname "$(readlink -f "$0")")/plugins.lock"
+
+lock_ref() {
+  [ -f "$LOCK" ] || return 1
+  # lines look like: owner/repo@commit   (comments and blanks ignored)
+  awk -v repo="$1" -F'@' '
+    /^[[:space:]]*#/ || /^[[:space:]]*$/ { next }
+    { gsub(/[[:space:]]/, "", $1); gsub(/[[:space:]]/, "", $2) }
+    $1 == repo { print $2; found=1; exit }
+    END { exit !found }
+  ' "$LOCK"
+}
+
 for p in "${PLUGINS[@]}"; do
-  echo ">> installing $p"
-  herdr plugin install "$p" --yes
+  if [ "${UNPINNED:-0}" = 1 ]; then
+    echo ">> installing $p (unpinned — latest)"
+    herdr plugin install "$p" --yes
+  elif ref="$(lock_ref "$p")" && [ -n "$ref" ]; then
+    echo ">> installing $p @ ${ref:0:12} (from plugins.lock)"
+    herdr plugin install "$p" --ref "$ref" --yes
+  else
+    echo ">> installing $p (WARN: no plugins.lock entry — taking latest)" >&2
+    herdr plugin install "$p" --yes
+  fi
 done
 
 echo ">> installed:"
