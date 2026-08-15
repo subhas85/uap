@@ -65,9 +65,13 @@ Options:
 Customizes: Phase 3 of runbook, firewall rules, `/etc/xrdp/xrdp.ini` listening interface.
 
 ### Q3.2 RDP listen scope
-Default: **bind to Tailscale interface only** (recommended; xrdp only accepts connections from your tailnet).
-Alternative: listen on all interfaces (less safe, only acceptable behind another firewall).
-Customizes: xrdp `Address=` in `xrdp.ini`, ufw rules.
+Default: **`tailscale-only`** (recommended; 3389 reachable only over your tailnet).
+Alternatives: **`lan`** — only the machine's own subnet; **`any`** — anywhere, acceptable only behind another firewall.
+Customizes: `identity.network.rdp_scope`. `apply.sh` enforces it with ufw — it opens the sshd port, removes any blanket `3389/tcp` allow, adds the scoped rule, and enables ufw if it wasn't already on. `any` adds a plain allow and enables nothing.
+
+Enforcement deliberately **fails open**: these boxes are normally administered over RDP, so a wrong rule locks you out of the machine you're configuring. If `tailscale-only` is set but no tailscale interface exists, or the sshd port can't be determined, `apply.sh` warns and leaves access untouched instead of half-applying a restriction. Join the tailnet and re-run `apply.sh xrdp` to close it properly.
+
+Note it does *not* set `Address=` in `xrdp.ini`. Pinning the listener to a tailnet IP means xrdp fails to bind whenever Tailscale is down or the address changes; a packet filter degrades better.
 
 ---
 

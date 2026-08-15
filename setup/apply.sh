@@ -185,6 +185,16 @@ WATCHDOG_CLIPBOARD_ACTIVE_PROBE=$(yq '.xrdp.watchdog_clipboard_active_probe // f
 TCP_KEEPALIVE=$(yq             '.xrdp.tcp_keepalive // true'              "$IDENTITY")
 MAX_BPP=$(yq                   '.xrdp.max_bpp // 24'                      "$IDENTITY")
 
+# Who may reach 3389. Enforced by install_xrdp via ufw (see configure_rdp_firewall).
+#   tailscale-only — only the tailnet interface (default; UAP's intended posture)
+#   lan            — only the primary interface's own subnet
+#   any            — anywhere. No firewall is enabled.
+RDP_SCOPE=$(yq '.network.rdp_scope // "tailscale-only"' "$IDENTITY")
+case "$RDP_SCOPE" in
+    tailscale-only|lan|any) ;;
+    *) die "identity.network.rdp_scope must be 'tailscale-only', 'lan' or 'any' (got '$RDP_SCOPE')" ;;
+esac
+
 # How subworkspaces are materialised inside the hub (QUESTIONNAIRE Q7.6):
 #   create  — real directories under ~/<hub>/ (default; the hub IS the layout)
 #   symlink — link pre-existing ~/<ws> folders into the hub (migrating operators)
@@ -504,6 +514,85 @@ install_herdr() {
     log "herdr: config, plugins and sysmeter applied. Reload a running server with 'herdr server reload-config'."
 }
 
+# Enforce identity.network.rdp_scope on port 3389 with ufw.
+#
+# Design note — this deliberately fails OPEN. UAP boxes are normally reached over
+# RDP, so a rule that is wrong locks the operator out of the machine they are
+# configuring. Every path that cannot be made safe warns loudly and leaves access
+# as it was, rather than half-applying a restriction.
+configure_rdp_firewall() {
+    if ! command -v ufw >/dev/null 2>&1; then
+        warn "xrdp: ufw not installed — rdp_scope='$RDP_SCOPE' is NOT enforced; 3389 is reachable from anywhere"
+        return 0
+    fi
+
+    if [ "$RDP_SCOPE" = "any" ]; then
+        run_sudo ufw allow 3389/tcp >/dev/null 2>&1 || true
+        log "xrdp: rdp_scope=any — 3389/tcp allowed from all sources (no firewall enabled)"
+        return 0
+    fi
+
+    # Work out the source restriction for the chosen scope.
+    local rule_desc
+    local -a rule_args
+    case "$RDP_SCOPE" in
+        tailscale-only)
+            local ts_if
+            ts_if=$(ip -o link show 2>/dev/null | awk -F': ' '{print $2}' | grep -m1 '^tailscale') || true
+            if [ -z "$ts_if" ]; then
+                warn "xrdp: rdp_scope=tailscale-only but no tailscale interface exists on this host."
+                warn "xrdp: refusing to firewall 3389 — doing so would cut off RDP entirely. Join the"
+                warn "xrdp: tailnet ('tailscale up'), then re-run: ~/uap/setup/apply.sh xrdp"
+                return 0
+            fi
+            rule_args=(allow in on "$ts_if" to any port 3389 proto tcp)
+            rule_desc="only via $ts_if (tailnet)"
+            ;;
+        lan)
+            local dev cidr
+            dev=$(ip -4 route show default 2>/dev/null | awk '{print $5; exit}')
+            cidr=$(ip -4 -o addr show dev "$dev" 2>/dev/null | awk '{print $4; exit}')
+            if [ -z "${cidr:-}" ]; then
+                warn "xrdp: rdp_scope=lan but the primary subnet could not be determined; leaving 3389 unrestricted"
+                return 0
+            fi
+            # normalise 10.0.11.41/24 -> 10.0.11.0/24
+            cidr=$(python3 -c "import ipaddress,sys; print(ipaddress.ip_network(sys.argv[1], strict=False))" "$cidr" 2>/dev/null) || {
+                warn "xrdp: could not normalise subnet for rdp_scope=lan; leaving 3389 unrestricted"; return 0; }
+            rule_args=(allow from "$cidr" to any port 3389 proto tcp)
+            rule_desc="only from $cidr"
+            ;;
+    esac
+
+    # Never enable a firewall without an SSH way back in first.
+    local ssh_ports
+    ssh_ports=$(run_sudo sshd -T 2>/dev/null | awk '/^port /{print $2}')
+    if [ -z "$ssh_ports" ]; then
+        warn "xrdp: could not determine the sshd port; refusing to enable ufw (lockout risk). 3389 left unrestricted"
+        return 0
+    fi
+    local p
+    for p in $ssh_ports; do
+        run_sudo ufw allow "$p"/tcp >/dev/null 2>&1 || true
+    done
+
+    # Drop any blanket 3389 allow left by an older apply.sh, or this scope is moot.
+    run_sudo ufw delete allow 3389/tcp >/dev/null 2>&1 || true
+
+    run_sudo ufw "${rule_args[@]}" >/dev/null 2>&1 || {
+        warn "xrdp: failed to add the scoped 3389 rule; leaving the firewall as it was"; return 0; }
+
+    # ufw permits ESTABLISHED/RELATED, so enabling will not drop the session
+    # running this script.
+    if ! run_sudo ufw status 2>/dev/null | grep -qE "^Status: active"; then
+        run_sudo ufw --force enable >/dev/null 2>&1 || {
+            warn "xrdp: 'ufw enable' failed — rules are staged but NOT in force"; return 0; }
+        log "xrdp: ufw enabled (ssh on ${ssh_ports// /, } kept open)"
+    fi
+
+    log "xrdp: rdp_scope=$RDP_SCOPE — 3389/tcp reachable $rule_desc"
+}
+
 install_xrdp() {
     local render="$RENDER_DIR/xrdp"
 
@@ -525,7 +614,8 @@ install_xrdp() {
             lcid_lower="${lcid_lower,,}"
             log "xrdp: DRY-RUN — would mirror /etc/xrdp/km-00000409.ini to km-${lcid_lower}.ini"
         fi
-        log "xrdp: DRY-RUN — would systemctl enable --now xrdp, ufw allow 3389/tcp, chmod 644 /etc/xrdp/key.pem"
+        log "xrdp: DRY-RUN — would systemctl enable --now xrdp, chmod 644 /etc/xrdp/key.pem"
+        log "xrdp: DRY-RUN — would enforce rdp_scope=$RDP_SCOPE on 3389/tcp via ufw"
         [ -d /etc/needrestart ] && log "xrdp: DRY-RUN — would install needrestart drop-in (xrdp excluded from auto-restart)"
         [ -d /etc/apt/apt.conf.d ] && log "xrdp: DRY-RUN — would install apt drop-in (X/xrdp stack excluded from unattended-upgrades)"
         return 0
@@ -602,10 +692,8 @@ install_xrdp() {
     run_sudo systemctl enable --now xrdp >/dev/null 2>&1 || true
     run_sudo systemctl restart xrdp-sesman >/dev/null 2>&1 || true
 
-    # 6. Open the RDP port through ufw (no-op if ufw is inactive or rule exists).
-    if command -v ufw >/dev/null 2>&1; then
-        run_sudo ufw allow 3389/tcp >/dev/null 2>&1 || true
-    fi
+    # 6. Restrict who can reach 3389, per identity.network.rdp_scope.
+    configure_rdp_firewall
 
     # 7. Fix /etc/xrdp/key.pem perms so xrdp can use TLS.
     if [ -f /etc/xrdp/key.pem ]; then
