@@ -133,7 +133,7 @@ profiles/                       # pre-canned identity.yaml files (skip the wizar
   production-admin.yaml         # prompts on, no autostart; high-stakes access (servers, cloud tenants, client data)
 os/                             # system chrome — what Ubuntu looks like
   i3/, alacritty/, wezterm/, rofi/, xinitrc/, typora-themes/
-  gtk-theme/, plymouth/, xrdp/, workspace-title-daemon/
+  gtk-theme/, plymouth/, xrdp/, workspace-title-daemon/, vm-guest/
   m365-admin-tools/             # PowerShell + Teams Phone admin module
 ai/                             # AI-assistant-facing pieces
   herdr/                        # Persistent terminal/agent workspace manager — binary,

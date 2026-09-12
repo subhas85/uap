@@ -429,6 +429,12 @@ Recovery when it happens: any Claude Code sessions in the stranded `:10` are sti
 
 On Proxmox, set the VM's memory ballooning *off* if you allocate a specific RAM size. With ballooning on, the displayed "memory" metric is the balloon size, which makes monitoring confusing and can squeeze the VM under host pressure.
 
+### J. "2 devices have a firmware upgrade available" in the SSH login banner (VMs)
+
+On a Proxmox/KVM guest with OVMF + Secure Boot, `fwupd` sees the VM's own EFI variables (`UEFI CA` db and `UEFI dbx` revocation list) as updatable "devices" and `fwupd-refresh.timer` writes a nag into the MOTD. These are **guest-side Secure Boot database updates**, not host firmware — the hypervisor's BIOS/BMC is unaffected. Don't apply them casually: the dbx update can revoke the shim/grub the guest boots from and brick boot, and fwupd only lists newer distros as tested.
+
+The `vm-guest` component disables `fwupd-refresh.timer` on any VM (`systemd-detect-virt` ≠ `none`) and removes the cached `/run/motd.d/85-fwupd`. `fwupdmgr` still works on demand. If you *do* want to apply them, snapshot the VM first (captures the EFI disk), then `sudo fwupdmgr update` and reboot — rollback restores the EFI vars. Details: `os/vm-guest/README.md`. Applied on adminbox 2026-09-12.
+
 ### I. Focused-window border doesn't show on Alacritty / WezTerm
 
 Symptom: the `client.focused` highlight (the colored border on the active window) paints correctly on browsers, Thunar, etc., but **not** on Alacritty or WezTerm — those windows show no border even when focused.
@@ -539,4 +545,5 @@ After deploy, confirm in this order:
 5. `pgrep -f i3-workspace-title` returns one PID
 6. `cat /etc/xrdp/reconnectwm.sh` matches `os/xrdp/reconnectwm.sh`
 7. `sudo update-alternatives --display default.plymouth` shows the UAP theme as the active link
-8. `systemctl is-active hermes-gateway` → `active` and `sudo readlink /proc/$(systemctl show -p MainPID --value hermes-gateway)/cwd` prints `/home/<user>/workspace`
+8. (VMs only) `systemctl is-enabled fwupd-refresh.timer` → `disabled`, and the SSH login banner has no "firmware upgrade available" line
+9. `systemctl is-active hermes-gateway` → `active` and `sudo readlink /proc/$(systemctl show -p MainPID --value hermes-gateway)/cwd` prints `/home/<user>/workspace`

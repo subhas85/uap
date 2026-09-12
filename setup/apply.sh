@@ -1153,6 +1153,30 @@ install_apps() {
     log "apps: installed selected operator apps from identity.apps.*"
 }
 
+# --- install_vm_guest: guest-only tweaks, no-op on bare metal --------------
+
+install_vm_guest() {
+    local virt
+    virt=$(systemd-detect-virt 2>/dev/null || echo none)
+    if [ "$virt" = none ]; then
+        log "vm-guest: not a VM (systemd-detect-virt=none) — nothing to do"
+        return 0
+    fi
+
+    if [ "$DRY_RUN" = 1 ]; then
+        log "vm-guest: DRY-RUN — would disable fwupd-refresh.timer (virt=$virt)"
+        return 0
+    fi
+
+    # fwupd treats the guest's Secure Boot db/dbx EFI vars as updatable
+    # firmware and nags in the SSH MOTD. See os/vm-guest/README.md.
+    if systemctl list-unit-files fwupd-refresh.timer >/dev/null 2>&1; then
+        run_sudo systemctl disable --now fwupd-refresh.timer >/dev/null 2>&1 || true
+        run_sudo rm -f /run/motd.d/85-fwupd
+        log "vm-guest: disabled fwupd-refresh.timer (virt=$virt) — firmware MOTD nag silenced"
+    fi
+}
+
 # --- Drive components -----------------------------------------------------
 
 # Pick the list of components to run

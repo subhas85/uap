@@ -103,3 +103,4 @@ components_enabled:
   - apps
   - claude-settings
   - herdr
+  - vm-guest
