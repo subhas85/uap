@@ -5,6 +5,7 @@ Installs operator-facing Microsoft 365 / Teams administration tooling on UAP:
 - PowerShell (`pwsh`) from Microsoft's Ubuntu 24.04 apt repository.
 - PowerShell Gallery `MicrosoftTeams` module (CurrentUser scope) — Teams Phone + Teams policy work.
 - PowerShell Gallery `Microsoft.Graph.Teams` module (CurrentUser scope) — Graph queries Connect-MicrosoftTeams doesn't cover (e.g. `Get-MgAppCatalogTeamsApp` for finding a Teams catalog app id by externalId).
+- PowerShell Gallery `ExchangeOnlineManagement` module (CurrentUser scope) — Exchange Online + Defender for Office 365: quarantine, anti-spam/anti-phish policies, Tenant Allow/Block List, mail-flow rules.
 - `librsvg2-bin` (apt) — `rsvg-convert` for SVG→PNG when preparing Copilot Studio agent icons.
 
 Use a separate Azure CLI profile for elevated admin work so the normal account stays isolated:
@@ -78,3 +79,38 @@ Republish via the bound action when content changes:
 curl -X POST "$DV_URL/api/data/v9.2/bots(<botid>)/Microsoft.Dynamics.CRM.PvaPublish" \
   -H "Authorization: Bearer $DV_TOKEN" -d '{}'
 ```
+
+## Exchange Online / Defender for Office 365 from the CLI
+
+Quarantine, anti-spam and anti-phish policies, the Tenant Allow/Block List and mail-flow rules are
+not exposed through Graph; use `ExchangeOnlineManagement`. Sign in with the elevated admin account.
+
+**Device-code flow, and why it needs an unattended script.** `Connect-ExchangeOnline -Device`
+prints a code for `https://login.microsoft.com/device` and blocks until the operator completes it
+(hard 15-minute window, then `code_expired`). The session lives only inside that `pwsh` process,
+so put the connect + every cmdlet + disconnect in one script and run it detached:
+
+```bash
+cat > exo-task.ps1 <<'PS1'
+Connect-ExchangeOnline -Device -UserPrincipalName admin@yourdomain.com -ShowBanner:$false
+Get-HostedContentFilterPolicy | ConvertTo-Json -Depth 5 | Out-File antispam.json
+Get-QuarantineMessage -PageSize 1000 | ConvertTo-Json -Depth 3 | Out-File quarantine.json
+Disconnect-ExchangeOnline -Confirm:$false
+PS1
+setsid nohup pwsh -NoProfile -File exo-task.ps1 > exo-task.log 2>&1 < /dev/null & disown
+sleep 20; cat exo-task.log      # shows the device code; operator completes it in a browser
+```
+
+Gotchas:
+
+- Don't `pkill -f exo-task.ps1` in the same shell command that relaunches it — the pattern also
+  matches the new process. Kill in one command, relaunch in the next.
+- `Get-QuarantineMessage` caps at 1000 per page; use `-Page N` to walk further back.
+- `Set-*Policy` list parameters take `@{Add=...}` / `@{Remove=...}` hashtables; full-list
+  parameters (e.g. `-RegionBlockList`, `-SenderDomainIs` on transport rules) *replace* the list —
+  read first, then write the union.
+- Read every changed object back at the end of the script and diff it; the cmdlets rarely error
+  on a no-op.
+
+Operational guidance for *what* to change (allow-list ladder, quarantine digests, impersonation
+protection) is organisation-specific and lives in the ops workspace, not here.

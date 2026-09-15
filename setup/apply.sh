@@ -994,11 +994,11 @@ install_m365_admin_tools() {
 
     apt_install powershell librsvg2-bin
 
-    log "m365-admin-tools: installing/updating MicrosoftTeams + Microsoft.Graph.Teams PowerShell modules for ${USERNAME}"
+    log "m365-admin-tools: installing/updating MicrosoftTeams + Microsoft.Graph.Teams + ExchangeOnlineManagement PowerShell modules for ${USERNAME}"
     pwsh -NoLogo -NoProfile -Command \
-        'Set-PSRepository -Name PSGallery -InstallationPolicy Trusted; Install-Module MicrosoftTeams -Scope CurrentUser -Force -AllowClobber -Repository PSGallery; Install-Module Microsoft.Graph.Teams -Scope CurrentUser -Force -AllowClobber -Repository PSGallery' >/dev/null
+        'Set-PSRepository -Name PSGallery -InstallationPolicy Trusted; Install-Module MicrosoftTeams -Scope CurrentUser -Force -AllowClobber -Repository PSGallery; Install-Module Microsoft.Graph.Teams -Scope CurrentUser -Force -AllowClobber -Repository PSGallery; Install-Module ExchangeOnlineManagement -Scope CurrentUser -Force -AllowClobber -Repository PSGallery' >/dev/null
 
-    log "m365-admin-tools: installed pwsh + MicrosoftTeams + Microsoft.Graph.Teams + librsvg2-bin"
+    log "m365-admin-tools: installed pwsh + MicrosoftTeams + Microsoft.Graph.Teams + ExchangeOnlineManagement + librsvg2-bin"
 }
 
 # --- install_apps: operator-facing apps from identity.apps.* --------------

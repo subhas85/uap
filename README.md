@@ -114,7 +114,7 @@ Future work — fully hands-off provisioning from a hypervisor API (e.g., Proxmo
 - Custom Plymouth boot splash (UAP logo on Tokyo Night background — visible on hypervisor console / bare-metal display)
 - **Optional Telegram surface:** [Hermes Agent](https://hermes-agent.nousresearch.com/) (Nous Research, MIT) is the recommended way to reach the same assistant from your phone. Hermes runs as a systemd service, shares `~/workspace/CLAUDE.md` and `~/.hermes/SOUL.md` + memories with Claude Code, and is documented as a UAP component at `ai/hermes-agent/`.
 - **Optional agent reach layer:** [Agent Reach](https://github.com/Panniantong/Agent-Reach) adds read/search access to external content sources (web pages, YouTube subtitles, GitHub, RSS, Exa search, V2EX, basic Bilibili) for Hermes/Claude workflows. UAP documents the core install and safety posture at `ai/agent-reach/`; cookie-backed social channels are not enabled by default.
-- Optional admin-tooling components you can swap for your own — the bundled example, `m365-admin-tools`, installs PowerShell + the `MicrosoftTeams` module for operators who manage a Microsoft 365 tenant; drop it if you don't.
+- Optional admin-tooling components you can swap for your own — the bundled example, `m365-admin-tools`, installs PowerShell + the `MicrosoftTeams`, `Microsoft.Graph.Teams` and `ExchangeOnlineManagement` modules for operators who manage a Microsoft 365 tenant; drop it if you don't.
 
 ## Layout of this folder
 
@@ -134,7 +134,7 @@ profiles/                       # pre-canned identity.yaml files (skip the wizar
 os/                             # system chrome — what Ubuntu looks like
   i3/, alacritty/, wezterm/, rofi/, xinitrc/, typora-themes/
   gtk-theme/, plymouth/, xrdp/, workspace-title-daemon/, vm-guest/
-  m365-admin-tools/             # PowerShell + Teams Phone admin module
+  m365-admin-tools/             # PowerShell + Teams / Graph / Exchange Online admin modules
 ai/                             # AI-assistant-facing pieces
   herdr/                        # Persistent terminal/agent workspace manager — binary,
                                 #   config.toml, pinned plugin set, CPU/RAM sidebar meter
