@@ -311,6 +311,19 @@ If you don't want the autostart on a specific login, kill it after start (`pkill
 
 Both share the same command, so behavior is identical: alacritty in `~/workspace/`, Claude with `bypassPermissions` and remote-control on.
 
+## Phase 8.62 — Claude Code plugin profile
+
+After Claude Code is logged in, install the pinned plugin set, lean-ctx (Hybrid mode) and the
+language servers:
+
+```
+~/uap/ai/claude-plugins/install.sh          # add --no-lsp or --no-repos to skip parts
+```
+
+What is installed and, more importantly, what is deliberately left out (caveman, the official
+`azure` plugin, lean-ctx Replace mode) is documented in `ai/claude-plugins/README.md`. Per-repo
+language servers are driven by `~/uap.local/claude-repo-plugins.list`.
+
 ## Phase 8.65 — Hermes Agent (Telegram surface, recommended)
 
 UAP's recommended way to reach the operator's assistant from a phone is [Hermes Agent](https://hermes-agent.nousresearch.com/) (Nous Research, MIT-licensed) running on Telegram. Hermes is treated as a second surface of the same assistant Claude Code presents in the terminal — not a separate persona. It runs as a systemd service, talks to a bot you create in @BotFather, and shares Claude Code's knowledge layer on this machine: identity in `~/.hermes/SOUL.md`, bounded operator profile + environment memory in `~/.hermes/memories/`, and the same project-context router (`~/workspace/CLAUDE.md`) discovered from the gateway's working directory. The result: you can switch between the terminal Claude session and the Telegram bot without re-explaining who you are, what UAP is, or what you're working on.

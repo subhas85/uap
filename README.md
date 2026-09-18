@@ -142,6 +142,8 @@ ai/                             # AI-assistant-facing pieces
   desktop-entries/              # rofi launcher + icons for Herdr and "Claude (workspace)"
   hermes-agent/                 # Optional Telegram surface — install + SOUL.md / USER.md / MEMORY.md / systemd drop-in
   agent-reach/                  # Optional read/search capability layer for external content sources
+  claude-plugins/               # Claude Code plugin profile: what is in, what is out and why; lean-ctx
+                                #   Hybrid config, ponytail lite, LSPs, per-repo local-scope plugins
 workflows/                      # reusable workflow patterns (each with its own CLAUDE.md)
   dev/, helpdesk/, incidents/, requirements/
 ```

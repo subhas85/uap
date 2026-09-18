@@ -1,0 +1,32 @@
+# lean-ctx — UAP profile (installed by ai/claude-plugins/install.sh)
+# Hybrid mode: MCP server + shell-output compression + read dedup.
+# Nothing denied; native Read/Grep/Glob untouched.
+# Rationale: ai/claude-plugins/README.md
+# TOML: top-level keys MUST stay above the first [section].
+# Shell gating: off (warn mode spams a WARN line into every tool result). This is an ops box (systemctl, az, gh, wrangler, ssh, docker…); Claude Code permissions.deny is the safety net. Compression unaffected.
+shell_security = "off"
+behavior_nudges = "off"
+shadow_mode = false
+# 3.10.1: UserPromptSubmit still injects a "ctx_* policy" line unless this is explicit
+prompt_reinject = "off"
+# Prose shaping off — we want decision-grade answers; tool-output compression is separate and stays on
+compression_level = "off"
+read_redirect = "off"
+rules_injection = "off"
+update_check_disabled = true
+# 16 tools instead of 68
+tool_profile = "standard"
+# #814: this workspace runs python3 -c / node -e constantly; blocking them breaks normal work
+shell_allow_inline_scripts = true
+
+[setup]
+auto_inject_rules = false
+
+[solution]
+enabled = false
+inject_in_instructions = false
+inject_in_compose = false
+inject_in_subagents = false
+
+[telemetry]
+enabled = false

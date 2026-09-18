@@ -1,0 +1,8 @@
+# Per-repository Claude Code plugins, installed at --scope local (.claude/settings.local.json,
+# git-ignored). One line per repo: <absolute repo path> <plugin@marketplace> [<plugin@marketplace> ...]
+# Copy to ~/uap.local/claude-repo-plugins.list and edit. Lines starting with # are ignored.
+#
+# Language servers need their binary on PATH first (install.sh handles csharp-ls + typescript-language-server).
+/home/operator/workspace          typescript-lsp@claude-plugins-official csharp-lsp@claude-plugins-official context7@claude-plugins-official
+/home/operator/dev/my-nuxt-site   typescript-lsp@claude-plugins-official frontend-design@claude-plugins-official context7@claude-plugins-official
+/home/operator/dev/my-dotnet-api  csharp-lsp@claude-plugins-official context7@claude-plugins-official
