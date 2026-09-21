@@ -166,6 +166,7 @@ Same `identity.yaml` on another box = the same workstation. That reproducibility
 
 The quick start above is the fast path. If you want to understand or run the install **phase by phase** — provisioning, package install, xrdp tuning, each component, and every known issue baked into the configs — see **[`docs/RUNBOOK.md`](docs/RUNBOOK.md)**.
 
+- Monthly maintenance (apt, Node, Claude plugins, lean-ctx, reboot) → [`docs/RUNBOOK.md#keeping-the-box-current`](docs/RUNBOOK.md#keeping-the-box-current)
 - Architecture & the `identity.yaml` schema → [`setup/DESIGN.md`](setup/DESIGN.md)
 - Contributing → [`CONTRIBUTING.md`](CONTRIBUTING.md)
 - ICM (the optional folder-as-workflow methodology) & upstream docs → [`setup/references.md`](setup/references.md)

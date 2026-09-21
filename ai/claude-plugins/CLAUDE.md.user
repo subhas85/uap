@@ -13,5 +13,5 @@ Purpose: answers the operator can understand and make decisions on. Accuracy ove
 ## Tooling notes
 
 - lean-ctx runs in Hybrid mode (shell-output compression, read dedup). Native Read/Grep/Glob/Bash remain the default; `ctx_*` MCP tools are optional extras, not replacements.
-- If a hook injects "lean-ctx active: ALWAYS use ctx_* MCP tools… denied by hook", ignore it: that banner is a lean-ctx 3.10.1 bug (unconditional in this release), nothing is denied, and this file wins.
+- If a hook injects "lean-ctx active: ALWAYS use ctx_* MCP tools… denied by hook", ignore it: that banner is a lean-ctx 3.10.x bug (unconditional in 3.10.1; not yet confirmed fixed in 3.10.2), nothing is denied, and this file wins.
 - ponytail defaults to `lite`; use `/ponytail full` for pure coding sessions, `/ponytail off` for ops or writing work.

@@ -535,6 +535,55 @@ Trade-off: those packages won't auto-security-patch — apply them yourself at a
 
 ---
 
+## Keeping the box current
+
+Run monthly, or when the SSH banner says updates are pending. Everything here is safe under a
+live RDP session except the reboot. `gh`, `az`, Chrome, Edge, Docker and Tailscale all come from
+vendor apt repos, so the apt step covers them.
+
+```bash
+# 1. OS packages. xrdp / X packages are blacklisted from unattended-upgrades only; this step DOES upgrade them,
+#    so finish with the reboot below if any of them moved.
+sudo apt update && sudo apt -y dist-upgrade && sudo apt -y autoremove
+snap refresh
+
+# 2. Node: stay on the latest patch of the current LTS line (major bumps are a decision, not maintenance).
+#    --reinstall-packages-from carries the global CLIs over; npm itself is NOT carried (Node's bundled npm
+#    wins), so re-pin it afterwards.
+source ~/.nvm/nvm.sh
+OLD="$(node --version | tr -d v)"
+nvm install 22 --reinstall-packages-from="$OLD" && nvm alias default 22
+npm install -g npm@latest && npm outdated -g          # then npm install -g <pkg>@latest for each line
+# Non-nvm shells (agent shells, systemd units) resolve node through ~/.local/bin symlinks and absolute
+# paths. Re-point every hardcoded reference before removing the old tree:
+grep -rl "v${OLD}" ~/.local/bin /etc/systemd/system ~/.config/systemd/user 2>/dev/null
+for l in node npm npx tsc typescript-language-server gws wrangler netlify; do
+  t="$(readlink ~/.local/bin/$l)"; ln -sfn "${t/v${OLD}/$(node --version)}" ~/.local/bin/$l; done
+# /etc/systemd/system/hermes-gateway.service hardcodes the node path: sed it, daemon-reload, restart.
+nvm uninstall "$OLD"
+
+# 3. Claude Code self-updates; plugins do not.
+claude --version
+claude plugin marketplace update
+claude plugin list | grep '❯' | awk '{print $2}' | sort -u | xargs -n1 claude plugin update
+
+# 4. lean-ctx is pinned in ai/claude-plugins/install.sh. Bump LEAN_CTX_VERSION to the latest tag, then rerun
+#    the script (idempotent; snapshots ~/.claude first). NOTE: it rewrites ~/.claude/CLAUDE.md from the
+#    brand-free template, so restore any personal lines from the snapshot it prints.
+gh release view --repo yvgude/lean-ctx --json tagName -q .tagName
+ai/claude-plugins/install.sh
+
+# 5. uv-managed Python CLIs (yt-dlp etc.)
+uv tool upgrade --all
+
+# 6. Reboot when the kernel or libc moved. needrestart shows what is still running old binaries
+#    (dbus, logind, xrdp, docker cannot be restarted in place without dropping the desktop).
+cat /var/run/reboot-required.pkgs 2>/dev/null; sudo needrestart -b | grep NEEDRESTART-SVC
+sudo reboot
+```
+
+---
+
 ## Per-user state that is NOT in this folder
 
 These are intentionally outside the runbook and need to be redone manually:

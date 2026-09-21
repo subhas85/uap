@@ -9,7 +9,7 @@
 set -euo pipefail
 
 HERE="$(dirname "$(readlink -f "$0")")"
-LEAN_CTX_VERSION="3.10.1"
+LEAN_CTX_VERSION="3.10.2"
 REPO_LIST="${HOME}/uap.local/claude-repo-plugins.list"
 DO_LSP=1; DO_REPOS=1
 for a in "$@"; do case "$a" in --no-lsp) DO_LSP=0;; --no-repos) DO_REPOS=0;; esac; done
