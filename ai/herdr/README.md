@@ -73,6 +73,7 @@ What comes back after the full stop (verified on the 0.9.1 jump, 11 spaces / 46 
 Post-update gotchas seen so far:
 
 - If plugins get (re)installed while the server is already running, they miss their `startup`/`ensure` hooks and `$claude_usage` / the agent rows stay empty until an event fires: `herdr plugin action invoke refresh --plugin usagebar` restores the agent rows. `update.sh` installs plugins before the server starts, so this only applies to manual installs.
+- The claude-usage daemon (`monitor.py daemon`) has no `[[startup]]` hook and its `ensure` is a no-op while a stale pid is alive, so a server relaunch can leave the `Session xx% | Week xx%` row empty (seen 2026-09-21). `sysmeter.sh` doubles as its watchdog: when the `claude_usage` token is missing from the Claude space it invokes the plugin's `stop` + `start` actions, at most once per 10 min. Verified end-to-end (token gone → back within ~20 s).
 - `hermes gateway restart` needs root (system unit): `sudo systemctl restart hermes-gateway.service`.
 - 2026-07-21 (0.7.3 → 0.7.4 handoff): the server's plugin registry was replaced; `install-plugins.sh` re-registers the set idempotently.
 
