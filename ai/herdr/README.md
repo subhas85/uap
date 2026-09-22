@@ -59,16 +59,20 @@ setsid env -u HERDR_ENV -u HERDR_PANE_ID -u HERDR_TAB_ID -u HERDR_WORKSPACE_ID -
 **Full stop (crossing an endpoint-generation/protocol boundary, e.g. 0.7.4 → 0.9.1 done 2026-09-21):** handoff cannot carry panes, so use `update.sh` — stop server → `herdr update` → headless `herdr server` → plugins → integrations → Hermes restart, logging to `~/.config/herdr/update-<ts>.log`:
 
 ```bash
+# From a PLAIN terminal (ctrl+b q to detach first, or an SSH shell) — never from a Claude Code pane/shell.
 cp -a ~/.config/herdr ~/.config/herdr.bak-$(date +%F)        # session.json, plugins, config
-setsid nohup env -u HERDR_ENV -u HERDR_PANE_ID -u HERDR_TAB_ID -u HERDR_WORKSPACE_ID -u HERDR_SOCKET_PATH \
-  UNPINNED=1 NEW_CONFIG=~/uap/ai/herdr/config.toml bash ~/uap/ai/herdr/update.sh >/dev/null 2>&1 </dev/null &
+env -u HERDR_ENV -u HERDR_PANE_ID -u HERDR_TAB_ID -u HERDR_WORKSPACE_ID -u HERDR_SOCKET_PATH \
+  UNPINNED=1 NEW_CONFIG=~/uap/ai/herdr/config.toml bash ~/uap/ai/herdr/update.sh
+# then: Alt+d → Herdr (terminal workspace) — the client spawns the new server
 ```
+
+**The server must be spawned by your own client (Alt+d), never by a script running under an agent.** Panes inherit the server's environment. On 2026-09-21 the first 0.9.1 server was started from a Claude Code shell: every pane got `CLAUDE_CODE_CHILD_SESSION=1`, Claude Code showed *"Transcript saving is off — inherited CLAUDE_CODE_CHILD_SESSION marker"* and stopped persisting sessions until the server was stopped and relaunched from Alt+d. `update.sh` now refuses to run with `CLAUDECODE` set and no longer starts a server.
 
 What comes back after the full stop (verified on the 0.9.1 jump, 11 spaces / 46 tabs / 3 agents): layout, labels and cwd from `session.json`; pane text from `session-history.json` (`experimental.pane_history = true`, so parked tabs keep their printed `claude --resume <id>` line); Claude panes re-launched via native `claude --resume` (needs the `claude` integration ≥ v6 — `herdr integration status`). Shell processes in panes do not survive. The attached Alacritty client closes with the server; re-open with **Alt+d → Herdr**.
 
 Post-update gotchas seen so far:
 
-- Plugins installed after the server starts miss their `startup`/`ensure` hooks: `$claude_usage` and the agent rows stay empty until an event fires. Nudge them with `herdr plugin action invoke refresh --plugin usagebar` (agent rows) and any pane/workspace create (Claude Usage), or just wait for the next focus event.
+- If plugins get (re)installed while the server is already running, they miss their `startup`/`ensure` hooks and `$claude_usage` / the agent rows stay empty until an event fires: `herdr plugin action invoke refresh --plugin usagebar` restores the agent rows. `update.sh` installs plugins before the server starts, so this only applies to manual installs.
 - `hermes gateway restart` needs root (system unit): `sudo systemctl restart hermes-gateway.service`.
 - 2026-07-21 (0.7.3 → 0.7.4 handoff): the server's plugin registry was replaced; `install-plugins.sh` re-registers the set idempotently.
 

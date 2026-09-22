@@ -8,6 +8,10 @@
 #   NEW_CONFIG=/path/config.toml   copy this over ~/.config/herdr/config.toml while stopped
 #   UNPINNED=1                     take latest plugin commits and rewrite plugins.lock
 set -u
+if [ -n "${CLAUDECODE:-}" ] || [ -n "${CLAUDE_CODE_CHILD_SESSION:-}" ]; then
+  echo "refusing: running inside a Claude Code shell. Run from a plain terminal (or Hermes), see README." >&2
+  exit 2
+fi
 HERE="$(cd "$(dirname "$(readlink -f "$0")")" && pwd)"
 CFG_DIR="$HOME/.config/herdr"
 LOG="$CFG_DIR/update-$(date +%Y%m%d-%H%M%S).log"
@@ -32,11 +36,6 @@ log "-- herdr update"
 herdr update </dev/null || { log "UPDATE FAILED ($?) — restarting old server"; }
 log "now: $(herdr --version)"
 
-log "-- headless server start"
-setsid herdr server >"$CFG_DIR/herdr-server.log" 2>&1 </dev/null &
-for _ in $(seq 1 30); do herdr workspace list >/dev/null 2>&1 && break; sleep 1; done
-herdr workspace list >/dev/null 2>&1 || { log "SERVER DID NOT COME UP — see herdr-server.log"; exit 1; }
-
 log "-- plugins (UNPINNED=${UNPINNED:-0})"
 UNPINNED="${UNPINNED:-0}" bash "$HERE/install-plugins.sh" || log "install-plugins.sh returned $?"
 if [ "${UNPINNED:-0}" = 1 ]; then
@@ -57,7 +56,11 @@ sudo -n systemctl restart hermes-gateway.service || log "hermes restart returned
 
 log "-- final state"
 herdr --version
-herdr workspace list
-herdr agent list
 herdr plugin list
-log "== done. Re-attach with Alt+d → Herdr (terminal workspace)."
+herdr integration status
+# Deliberately NOT starting the server here. Panes inherit the server's environment,
+# so it must be spawned by the user's own client (Alt+d → Herdr) with the desktop
+# session env — not by whatever shell ran this script. 2026-09-21: a server started
+# from a Claude Code shell gave every pane CLAUDE_CODE_CHILD_SESSION=1 and Claude Code
+# silently stopped saving transcripts.
+log "== done. Start the server yourself: Alt+d → Herdr (terminal workspace). Layout, pane text and Claude sessions restore on attach."
