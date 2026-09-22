@@ -25,7 +25,7 @@ That does four things:
 ~/uap/setup/apply.sh --force-herdr-config herdr   # keeps a .uap-bak of the old file
 ```
 
-Everything below the binary step is **skipped with a warning if the installed Herdr is older than 0.7.4** (`HERDR_MIN_VERSION` in `apply.sh`) — the tracked config assumes the 0.7.4 "popup" pane type. Update Herdr first, then rerun.
+Everything below the binary step is **skipped with a warning if the installed Herdr is older than 0.9.1** (`HERDR_MIN_VERSION` in `apply.sh`) — the tracked config uses 0.9.x sidebar token rules and `ui.window_title`. Update Herdr first (see *Updating*), then rerun.
 
 After applying against a running server, pick up the config with `herdr server reload-config`.
 
@@ -45,25 +45,38 @@ herdr channel show
 herdr channel set stable   # or preview
 ```
 
-### Updating without losing panes/agents
+### Updating
 
-`herdr update` **refuses to run from inside a Herdr pane** (`run herdr update outside herdr after detaching from the session`). Because the whole box lives inside one persistent session, detach first, or run the updater in a detached process with the `HERDR_*` env stripped:
+`herdr update` **refuses to run from inside a Herdr pane** (`run herdr update outside herdr after detaching from the session`). Because the whole box lives inside one persistent session, run it detached with the `HERDR_*` env stripped. Two paths:
+
+**Routine (same endpoint generation, ≥ 0.9.0 on both sides):** plain `herdr update` installs the new client and leaves the running server and its panes alone; `--handoff` (experimental) swaps the server too while keeping pane PTYs and agents alive.
 
 ```bash
 setsid env -u HERDR_ENV -u HERDR_PANE_ID -u HERDR_TAB_ID -u HERDR_WORKSPACE_ID -u HERDR_SOCKET_PATH \
   bash -lc 'herdr update --handoff' >~/.config/herdr/update-handoff.log 2>&1 < /dev/null &
 ```
 
-`--handoff` performs a **live handoff**: pane PTYs (and the agents running in them) survive the server swap when the protocol version is unchanged. Verify with `herdr --version` and `herdr workspace list`.
+**Full stop (crossing an endpoint-generation/protocol boundary, e.g. 0.7.4 → 0.9.1 done 2026-09-21):** handoff cannot carry panes, so use `update.sh` — stop server → `herdr update` → headless `herdr server` → plugins → integrations → Hermes restart, logging to `~/.config/herdr/update-<ts>.log`:
 
-Gotcha observed 2026-07-21 (0.7.3 → 0.7.4): the handoff replaced the server's **plugin registry**, so plugins installed on the old binary stopped showing in `herdr plugin list`. The files stay on disk under `~/.config/herdr/plugins/github/`; just re-run `herdr plugin install <owner>/<repo>` (cached, instant) to re-register them on the new server. `install-plugins.sh` does this idempotently.
+```bash
+cp -a ~/.config/herdr ~/.config/herdr.bak-$(date +%F)        # session.json, plugins, config
+setsid nohup env -u HERDR_ENV -u HERDR_PANE_ID -u HERDR_TAB_ID -u HERDR_WORKSPACE_ID -u HERDR_SOCKET_PATH \
+  UNPINNED=1 NEW_CONFIG=~/uap/ai/herdr/config.toml bash ~/uap/ai/herdr/update.sh >/dev/null 2>&1 </dev/null &
+```
 
-### Known upgrade hazards past 0.7.4
+What comes back after the full stop (verified on the 0.9.1 jump, 11 spaces / 46 tabs / 3 agents): layout, labels and cwd from `session.json`; pane text from `session-history.json` (`experimental.pane_history = true`, so parked tabs keep their printed `claude --resume <id>` line); Claude panes re-launched via native `claude --resume` (needs the `claude` integration ≥ v6 — `herdr integration status`). Shell processes in panes do not survive. The attached Alacritty client closes with the server; re-open with **Alt+d → Herdr**.
 
-Two upstream changes make a jump from 0.7.4 more than a routine update — plan for both before running the handoff:
+Post-update gotchas seen so far:
 
-- **0.7.5 moves plugin state from per-session to global-per-user.** Installed/linked plugins and their enabled state are no longer isolated by Herdr session. Anything installed *inside a named session* on ≤0.7.4 must be installed or linked again afterwards. Re-running `apply.sh herdr` covers the pinned set.
-- **0.8.0 bumps the wire protocol to 19.** A live `--handoff` only preserves pane PTYs when the protocol version is unchanged, so crossing this boundary means panes and the agents in them will not survive. Drain or checkpoint long-running agent sessions first.
+- Plugins installed after the server starts miss their `startup`/`ensure` hooks: `$claude_usage` and the agent rows stay empty until an event fires. Nudge them with `herdr plugin action invoke refresh --plugin usagebar` (agent rows) and any pane/workspace create (Claude Usage), or just wait for the next focus event.
+- `hermes gateway restart` needs root (system unit): `sudo systemctl restart hermes-gateway.service`.
+- 2026-07-21 (0.7.3 → 0.7.4 handoff): the server's plugin registry was replaced; `install-plugins.sh` re-registers the set idempotently.
+
+### Upgrade hazards (historical, for the runbook)
+
+- **0.7.5** moved plugin state from per-session to global-per-user — anything installed inside a named session on ≤ 0.7.4 must be installed again.
+- **0.8.0** bumped the wire protocol to 19, relicensed to Apache-2.0 (was AGPL) and moved the repo to `herdrdev/herdr`.
+- **0.9.0** introduced *endpoint generation 1* (protocol 22). Servers older than that need one final full stop; after it, client updates no longer force server restarts.
 
 ## UAP launcher
 
@@ -96,15 +109,15 @@ Herdr plugins are discovered from the GitHub topic `herdr-plugin` and installed 
 
 The plugin set is managed declaratively by **herdr-lazy** (see *Declarative management* below): `plugins.list` (intent) + `plugins.lock` (pinned commits) are the source of truth, both tracked in this dir. `install-plugins.sh` remains as a lazy-free fallback.
 
-The UAP default set (requires Herdr ≥ 0.7.4). **Deliberately kept minimal** — the keybinding-launched panes (File Viewer, PR Tracker, Phin Board) were trialled and dropped; only the two passive **sidebar meters** earned their keep, plus the manager.
+The UAP default set (requires Herdr ≥ 0.9.1 — the tracked `config.toml` uses 0.9.x sidebar token rules and `ui.window_title`). **Deliberately kept minimal** — the keybinding-launched panes (File Viewer, PR Tracker, Phin Board) were trialled and dropped; only the two passive **sidebar meters** earned their keep, plus the manager.
 
 | Plugin | Repo | What it does | How to open |
 |---|---|---|---|
 | Claude Usage | `alejodelosrios/herdr-claude-usage` | Live Session % / Week % Claude quota, rendered in its own top **"Claude"** spaces entry (needs the `[ui.sidebar.spaces]` `$claude_usage` row). | Passive — daemon auto-armed via events. |
 | Agent Usage | `senna-lang/herdr-agent-usage` (`usagebar`) | Per-agent **context %** + provider **rate-limit** rows in the **Agents** sidebar, plus toasts. | Passive — rows render from events. |
-| herdr-lazy | `natori-hrj/herdr-lazy` | Declarative plugin manager + lockfile (manages the rows above). | `ctrl+b shift+l` (`herdr-lazy.manage`) |
+| herdr-lazy | `natori-hrj/herdr-lazy` | Declarative plugin manager + lockfile (manages the rows above). **Pinned to `a53f498`** — newer commits ship no prebuilt for HEAD and need `cargo`, which this box does not have; `install-plugins.sh` falls back to the lock pin when `UNPINNED=1` fails. | `ctrl+b shift+l` (`herdr-lazy.manage`) |
 
-Config (`[ui.sidebar.*]` rows + `[ui.toast]` + the one keybinding) lives in `~/.config/herdr/config.toml`; the tracked reference is **`uap/ai/herdr/config.toml`**. Apply changes live with `herdr server reload-config`.
+Config (`[ui.sidebar.*]` rows + `[ui.toast]` + the one keybinding) lives in `~/.config/herdr/config.toml`; the tracked reference is **`uap/ai/herdr/config.toml`**. Apply changes live with `herdr server reload-config`. Since 0.9.1 the `$claude_usage` row carries colour rules (Week 70s → yellow, ≥ 80 → red bold; text `contains` matches because the token is a string, not a number) and `ui.window_title = "{workspace} · {tab}"` pushes the active Space into the outer terminal title, which the i3 bar shows.
 
 **Removed 2026-07-21 (pane-only, unused):** `smarzban/herdr-file-viewer`, `Matovidlo/herdr-pr-tracker`, `phin-tech/herdr-phin-board`. **Also removed:** `aorumbayev/herdr-ctx` (needed Bun, absent; duplicated usagebar's `$context`). To bring any back: `herdr-lazy add <owner/repo> && herdr-lazy sync`, then re-add its keybinding.
 
@@ -140,6 +153,10 @@ cp uap/ai/herdr/plugins.lock "$(herdr plugin config-dir herdr-lazy)/"
 ```
 
 Caveat: herdr-lazy manages install/uninstall only — it does **not** track enable/disable state. `herdr-ctx` is in the list (so `--prune` won't remove it) but stays **disabled**; re-disable it by hand after a fresh `restore` if needed. Also: its README marks Linux install as unverified upstream, but `probe`/`list`/`sync` are confirmed working on this box (2026-07-21).
+
+## Pane history across restarts
+
+`config.toml` sets `pane_history = true` under `[experimental]` (added 2026-09-21). Herdr then saves recent pane screen contents to `~/.config/herdr/session-history.json` and replays them after a full server restart or reboot, on top of the default snapshot restore (workspaces, tabs, labels, pane cwd, layout). Without it, panes come back as fresh shells with empty scrollback, which loses the `claude --resume <id>` line Claude prints on exit in a parked tab. The history file stores raw pane output, so it can contain secrets; keep it out of any backup that leaves the box. Apply with `herdr server reload-config`; no restart needed.
 
 ## CPU/RAM sidebar meter (sysmeter)
 

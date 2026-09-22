@@ -1,7 +1,7 @@
-# herdr-lazy lock — resolved plugin set at last sync.
+# herdr-lazy lock — resolved plugin set at last sync (2026-09-21, herdr 0.9.1).
 # Each `owner/repo@commit` reproduces exactly via `plugin install --ref`.
-# Commits come from herdr's own `source.resolved_commit`.
+# herdr-lazy stays on a53f498: newer commits need cargo (no prebuilt for HEAD) and this box has none.
 
-alejodelosrios/herdr-claude-usage@65f8c43af6a16d6695dfb82f4d409739343878e4
-senna-lang/herdr-agent-usage@29906750b77cf87359d0d60b2539f86cef0c8f9a
 natori-hrj/herdr-lazy@a53f498bbfcd3b1ba6cb6c7f0d84b78dd7f3036b
+alejodelosrios/herdr-claude-usage@67b13e892c851d8665303284d6259b4d939e48f9
+senna-lang/herdr-agent-usage@e96aaebe8cf1a28589f005164f9ce25936561bc4

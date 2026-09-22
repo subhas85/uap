@@ -18,7 +18,7 @@ PLUGINS=(
 #   smarzban/herdr-file-viewer  Matovidlo/herdr-pr-tracker  phin-tech/herdr-phin-board
 #   aorumbayev/herdr-ctx  (needs Bun; edits ~/.claude/settings.json; dup of usagebar $context)
 
-need="0.7.4"
+need="0.9.1"
 have="$(herdr --version 2>/dev/null | awk '{print $2}')"
 if [ "$(printf '%s\n%s\n' "$need" "$have" | sort -V | head -1)" != "$need" ]; then
   echo "Herdr $have < $need — run the detached update (see README) first." >&2
@@ -52,7 +52,13 @@ lock_ref() {
 for p in "${PLUGINS[@]}"; do
   if [ "${UNPINNED:-0}" = 1 ]; then
     echo ">> installing $p (unpinned — latest)"
-    herdr plugin install "$p" --yes
+    # A plugin whose HEAD needs a build we can't do (herdr-lazy without cargo)
+    # must not abort the whole set: fall back to its lock pin and carry on.
+    if ! herdr plugin install "$p" --yes; then
+      ref="$(lock_ref "$p" || true)"
+      echo ">> $p: latest failed — falling back to lock pin ${ref:0:12}" >&2
+      [ -n "$ref" ] && herdr plugin install "$p" --ref "$ref" --yes
+    fi
   elif ref="$(lock_ref "$p")" && [ -n "$ref" ]; then
     echo ">> installing $p @ ${ref:0:12} (from plugins.lock)"
     herdr plugin install "$p" --ref "$ref" --yes

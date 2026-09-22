@@ -1,6 +1,9 @@
 onboarding = false
 [ui]
 agent_panel_sort = "spaces"
+# 0.8.2+: Herdr writes this to the outer terminal title, so the i3 bar
+# (i3-workspace-title daemon) shows the active Herdr Space instead of "alacritty".
+window_title = "{workspace} · {tab}"
 
 [theme]
 name = "tokyo-night"
@@ -17,10 +20,17 @@ rows = [
 
 # --- Claude Usage (claude-usage): Session%/Week% quota token, rendered only in the
 # plugin's dedicated top "Claude" mini-space (intentional; do not close that space) ---
+# 0.9.0+ token rules (first match wins). The token is text ("Session 23% | Week 71%"),
+# so this matches the Week bucket by prefix: 100/90s/80s red+bold, 70s yellow.
 [ui.sidebar.spaces]
 rows = [
   ["state_icon", "workspace"],
-  ["$claude_usage"],
+  [{ token = "$claude_usage", rules = [
+      { contains = "Week 100", fg = "#f7768e", bold = true },
+      { contains = "Week 9",   fg = "#f7768e", bold = true },
+      { contains = "Week 8",   fg = "#f7768e", bold = true },
+      { contains = "Week 7",   fg = "#e0af68" },
+  ] }],
   ["$sys"],
 ]
 
@@ -36,3 +46,8 @@ position = "bottom-left"
 key = "prefix+shift+l"
 type = "plugin_action"
 command = "herdr-lazy.manage"
+
+# Replay recent pane scrollback after a server restart/reboot (session-history.json).
+# Enabled 2026-09-21 so parked tabs keep their "claude --resume <id>" line. Note: stores pane output on disk.
+[experimental]
+pane_history = true

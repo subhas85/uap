@@ -413,8 +413,8 @@ install_desktop_entries() {
 }
 
 # Minimum Herdr version the tracked config.toml + plugin set assume.
-# 0.7.4 introduced the "popup" pane type Claude Usage renders into.
-HERDR_MIN_VERSION="0.7.4"
+# 0.9.1: sidebar token rules + ui.window_title in the tracked config.toml (0.7.4 was the popup pane type).
+HERDR_MIN_VERSION="0.9.1"
 
 _herdr_version() { herdr --version 2>/dev/null | awk '{print $2}'; }
 
